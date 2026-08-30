@@ -83,7 +83,7 @@ public sealed class OrderNotesTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Notes.Should().HaveCount(2);
@@ -116,7 +116,7 @@ public sealed class OrderNotesTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Notes.Should().ContainSingle().Which.DateCreated.Should().BeOnOrAfter(before);

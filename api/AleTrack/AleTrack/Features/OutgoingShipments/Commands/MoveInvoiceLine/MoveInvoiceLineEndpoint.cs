@@ -85,6 +85,8 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
             return;
         }
 
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
+
         // Reconcile first so the move operates on a split that matches what is actually loaded.
         var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
         RemoveDetached(reconcileResult);
@@ -101,7 +103,7 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
             }
         }
 
-        var sourceItemId = ShipmentInvoiceGraph.ResolveSourceItemId(shipment, req.Data.SourceKind, req.Data.SourceItemId);
+        var sourceItemId = ShipmentInvoiceGraph.ResolveSourceItemId(split, req.Data.SourceKind, req.Data.SourceItemId);
         if (sourceItemId is null)
         {
             ThrowHelper.PublicEntityNotFound(req.Data.SourceKind.ToString(), req.Data.SourceItemId);
@@ -229,6 +231,10 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
 
     private void RemoveDetached(ReconcileResult result)
     {
+        // Private lines hang off no navigation EF walks, so they are added explicitly.
+        if (result.AddedPrivateLines.Count > 0)
+            dbContext.OutgoingShipmentInvoiceLines.AddRange(result.AddedPrivateLines);
+
         if (result.RemovedLines.Count > 0)
             dbContext.OutgoingShipmentInvoiceLines.RemoveRange(result.RemovedLines);
 

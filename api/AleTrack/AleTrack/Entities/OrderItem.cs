@@ -36,6 +36,16 @@ public sealed class OrderItem : PublicEntity
     public int Quantity { get; set; }
     
     /// <summary>
+    /// Whether this line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// </summary>
+    /// <remarks>
+    /// Part of the frozen content: it decides what the run loads and what the invoice bills, so
+    /// it is snapshotted with the quantity rather than merged separately like the note.
+    /// </remarks>
+    [Column("line_kind")]
+    public OrderLineKind LineKind { get; set; } = OrderLineKind.Normal;
+
+    /// <summary>
     /// State of the reminder for this item.
     /// </summary>
     [Column("reminder_state")]

@@ -86,8 +86,13 @@ public static class DeliveredLineQuery
         var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toDate = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
+        // A bill-only line is snapshotted so the invoicing can bill it, but nothing of it was
+        // carried — counting it as delivered volume would invent litres that never moved. A
+        // private line is the opposite case and stays: those pieces went out, they are simply
+        // not billed to anyone.
         var query = dbContext.OutgoingShipmentStopItems
-            .Where(si => si.Stop.Kind == OutgoingShipmentStopKind.Order
+            .Where(si => si.LineKind != OrderLineKind.BillOnly
+                         && si.Stop.Kind == OutgoingShipmentStopKind.Order
                          && si.Stop.OutgoingShipment.State == OutgoingShipmentState.Delivered
                          && si.Stop.OutgoingShipment.DeliveryDate != null
                          && si.Stop.OutgoingShipment.DeliveryDate >= fromDate

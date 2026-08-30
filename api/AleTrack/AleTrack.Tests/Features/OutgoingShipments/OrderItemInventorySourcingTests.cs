@@ -27,7 +27,8 @@ public sealed class OrderItemInventorySourcingTests
         OrderItem Item,
         OrderCustomExtraItem CustomExtra,
         InventoryItem Stock,
-        Client Client);
+        Client Client,
+        Vehicle Vehicle);
 
     private static Fixture BuildFixture(
         OutgoingShipmentState state = OutgoingShipmentState.Created,
@@ -68,7 +69,14 @@ public sealed class OrderItemInventorySourcingTests
                 Longitude = 16.6m
             });
 
-        return new Fixture(OutgoingShipmentBuilder.BuildEntity(state: state, stops: stops), order, item, customExtra, stock, client);
+        // A run cannot be loaded without a van, and these tests load one.
+        var vehicle = VehicleBuilder.BuildEntity(name: "3A2 1234");
+        vehicle.Id = 71;
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(state: state, stops: stops, vehicle: vehicle);
+        shipment.VehicleId = vehicle.Id;
+
+        return new Fixture(shipment, order, item, customExtra, stock, client, vehicle);
     }
 
     /// <summary>
@@ -85,6 +93,8 @@ public sealed class OrderItemInventorySourcingTests
         {
             Name = "vyvoz",
             DeliveryDate = DateTime.UtcNow.AddDays(1),
+            // A run cannot be loaded without one, and these tests load it.
+            VehicleId = f.Vehicle.PublicId,
             State = state,
             CustomStops = [.. f.Shipment.Stops
                 .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
@@ -124,13 +134,14 @@ public sealed class OrderItemInventorySourcingTests
     private static Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> MockFor(Fixture f)
     {
         var db = AleTrackDbContextMockFactory.CreateMock(
-            clients: [f.Client], orders: [f.Order], outgoingShipments: [f.Shipment], inventoryItems: [f.Stock]);
+            clients: [f.Client], orders: [f.Order], outgoingShipments: [f.Shipment],
+            inventoryItems: [f.Stock], vehicles: [f.Vehicle]);
         db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         return db;
     }
 
     private static UpdateOutgoingShipmentEndpoint Endpoint(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db) =>
-        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
     [Fact]
     public async Task Update_RecordsHowManyPiecesCameFromStock()

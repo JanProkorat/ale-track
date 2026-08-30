@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Features.OutgoingShipments.Queries.Export;
 using FluentAssertions;
 
@@ -69,5 +70,33 @@ public sealed class ShipmentExportFileNameTests
             BuildModel(shipmentName, new DateTime(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc)), "xlsx");
 
         name.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// The three files of one run have to be able to sit in one folder: a correction saved over the
+    /// paper that went out before the van is a lost original.
+    /// </summary>
+    [Theory]
+    [InlineData(ShipmentExportScope.Plan, "vyvoz-2026-08-03-patek-brno.xlsx")]
+    [InlineData(ShipmentExportScope.Changed, "vyvoz-2026-08-03-patek-brno-zmeny.xlsx")]
+    [InlineData(ShipmentExportScope.All, "vyvoz-2026-08-03-patek-brno-vse.xlsx")]
+    public void For_EachScope_NamesADistinctFile(ShipmentExportScope scope, string expected)
+    {
+        var model = BuildModel("Pátek – Brno", new DateTime(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc));
+
+        ShipmentExportFileName.For(model, "xlsx", scope).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Naming no scope is the plan, which is what the name has always meant — every file already in
+    /// the office's folders is one.
+    /// </summary>
+    [Fact]
+    public void For_NoScope_KeepsTheNameItAlwaysHad()
+    {
+        var model = BuildModel("Pátek – Brno", new DateTime(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc));
+
+        ShipmentExportFileName.For(model, "xlsx").Should()
+            .Be(ShipmentExportFileName.For(model, "xlsx", ShipmentExportScope.Plan));
     }
 }

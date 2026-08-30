@@ -830,6 +830,59 @@ public sealed class ShipmentInvoiceReconcilerTests
     /// Reconciles a shipment that has no pieces excluded from invoicing — the vast majority of
     /// cases. Tests that need private pieces build a split and use the overload below.
     /// </summary>
+    // ---------------------------------------------------------------------------------
+    // Line kinds. A private line is money already settled, so its pieces default off every
+    // invoice; a bill-only line is the opposite and is billed like any other.
+    // ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void Reconcile_PrivateLineKind_DefaultsThePiecesOffEveryInvoice()
+    {
+        var shipment = Shipment(OrderStop(clientId: 1, order: 1, (itemId: 10, qty: 6)));
+        OrderItemOf(shipment, 10).LineKind = OrderLineKind.Private;
+        var split = new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = [] };
+
+        var result = Reconcile(split);
+
+        LinesFor(shipment, 10).Should().BeEmpty("the client is not billed for these pieces");
+        var line = split.PrivateLines.Should().ContainSingle().Subject;
+        line.Quantity.Should().Be(6);
+        line.IsPrivate.Should().BeTrue();
+        // Nothing walks a private line's navigation, so the caller has to be told to add it.
+        result.AddedPrivateLines.Should().ContainSingle().Which.Should().BeSameAs(line);
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_PrivateLineKindTwice_DoesNotOpenASecondPrivateLine()
+    {
+        var shipment = Shipment(OrderStop(clientId: 1, order: 1, (itemId: 10, qty: 6)));
+        OrderItemOf(shipment, 10).LineKind = OrderLineKind.Private;
+        var split = new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = [] };
+
+        Reconcile(split);
+        var second = Reconcile(split);
+
+        split.PrivateLines.Should().ContainSingle().Which.Quantity.Should().Be(6);
+        second.AddedPrivateLines.Should().BeEmpty();
+        AssertBalanced(split);
+    }
+
+    // Absent from the truck is the nakládka's business; the invoice bills it like anything else.
+    [Fact]
+    public void Reconcile_BillOnlyLineKind_IsBilledLikeAnyOtherLine()
+    {
+        var shipment = Shipment(OrderStop(clientId: 1, order: 1, (itemId: 10, qty: 2)));
+        OrderItemOf(shipment, 10).LineKind = OrderLineKind.BillOnly;
+        var split = new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = [] };
+
+        Reconcile(split);
+
+        LinesFor(shipment, 10).Should().ContainSingle().Which.Quantity.Should().Be(2);
+        split.PrivateLines.Should().BeEmpty();
+        AssertBalanced(split);
+    }
+
     private static ReconcileResult Reconcile(OutgoingShipment shipment) =>
         ShipmentInvoiceReconciler.Reconcile(ShipmentInvoiceSplit.Of(shipment));
 

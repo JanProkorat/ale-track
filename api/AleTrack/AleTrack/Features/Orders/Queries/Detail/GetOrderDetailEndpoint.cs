@@ -78,7 +78,8 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                 Client = new ClientInfoDto
                 {
                     Id = o.Client.PublicId,
-                    Name = o.Client.Name
+                    Name = o.Client.Name,
+                    BusinessName = o.Client.BusinessName
                 },
                 DeliveryAddress = new OrderDeliveryAddressDto
                 {
@@ -115,6 +116,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,
                         ReminderState = i.ReminderState,
+                        LineKind = i.LineKind,
                         Note = i.Note,
                         BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
                         DisplayOrder = i.Product.DisplayOrder
@@ -151,6 +153,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         SupplierGoodId = i.SupplierGood.PublicId,
                         Quantity = i.Quantity,
                         Note = i.Note,
+                        LineKind = i.LineKind,
                         GoodName = i.SupplierGood.Name,
                         GoodSize = i.SupplierGood.Size,
                         SupplierId = i.SupplierGood.Supplier.PublicId,
@@ -165,6 +168,21 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                             .FirstOrDefault()
                     })
                     .ToList(),
+                // The Fakturace row covering this order, matched on the PAYING client — see the
+                // note at the shipment detail's own copy of this, and InvoiceReadiness for why.
+                // A cancelled run is excluded for the same reason the shipment below is: that
+                // order is back to being unplanned, so it has no row to finish.
+                IsInvoiceReady =
+                    o.OutgoingShipmentStop != null
+                    && o.OutgoingShipmentStop.OutgoingShipment.State != OutgoingShipmentState.Cancelled
+                    && o.OutgoingShipmentStop.OutgoingShipment.InvoiceConfirmations.Any(c => c.IsReady
+                        && c.ClientId == (o.Client.InvoicingClientId ?? o.ClientId)),
+                // What opens recording, and what closes ordinary editing. A cancelled run is
+                // excluded here too: its orders are freed, so paperwork filed on it holds nothing.
+                IsInvoicingFiled =
+                    o.OutgoingShipmentStop != null
+                    && o.OutgoingShipmentStop.OutgoingShipment.State != OutgoingShipmentState.Cancelled
+                    && o.OutgoingShipmentStop.OutgoingShipment.InvoicingFiledAt != null,
                 // Shipments carry no global soft-delete filter, so a cancelled run
                 // has to be excluded here — an order whose run was cancelled is
                 // back to being unplanned and shows no shipment at all.
@@ -192,6 +210,12 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
         
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(AleTrack.Entities.Order), req.Id);
+
+        // One rule, one place: the same function the update endpoint enforces decides what the
+        // screen may offer. A cancelled run projects no shipment at all, which reads here as an
+        // order that is planned onto nothing — editable, exactly as the entity rule says.
+        order.IsContentEditable = OrderMutability.IsContentEditable(
+            order.State, order.OutgoingShipment?.State, order.IsInvoicingFiled);
 
         await FillItemPricesAsync(order, ct);
 

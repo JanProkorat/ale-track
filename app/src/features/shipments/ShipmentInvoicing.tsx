@@ -17,15 +17,17 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions,
-  DialogContent, DialogTitle, FormControlLabel, IconButton, ListSubheader, MenuItem, Stack, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions,
+  DialogContent, DialogTitle, IconButton, Link, ListSubheader, MenuItem, Stack, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
+import CheckIcon from '@mui/icons-material/CheckOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUncheckedOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
@@ -48,12 +50,13 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useSetInvoiceReadiness,
+  useAddShipmentInvoice, useDeleteShipmentInvoice, useFileShipmentInvoicing, useMoveInvoiceLine,
+  useSetInvoiceReadiness,
   useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
-import { fmtLiters, num, plural } from 'src/lib/format';
+import { fmtDate, fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandOrderDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  bandAddress, bandOrderDetails, bandOrderId, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
   invoiceValue, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
@@ -340,6 +343,7 @@ export function ShipmentInvoicing({
   shipmentId,
   editable,
   stops = [],
+  onOpenOrder,
 }: {
   shipmentId: string;
   editable: boolean;
@@ -347,6 +351,9 @@ export function ShipmentInvoicing({
    * actually go — the invoice-split endpoint knows the client but not the
    * destination. Defaults to none so the section still renders without them. */
   stops?: OutgoingShipmentStopDto[];
+  /** Opens a band's own order. Withheld from a user who cannot see orders, which is what
+   *  turns the band's name back into plain text. */
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const { data, isLoading, isError, error } = useShipmentInvoices(shipmentId);
 
@@ -377,14 +384,23 @@ export function ShipmentInvoicing({
     );
   }
 
-  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} stops={stops} />;
+  return (
+    <InvoicingContent
+      shipmentId={shipmentId}
+      editable={editable}
+      data={data}
+      stops={stops}
+      onOpenOrder={onOpenOrder}
+    />
+  );
 }
 
-function InvoicingContent({ shipmentId, editable, data, stops }: {
+function InvoicingContent({ shipmentId, editable, data, stops, onOpenOrder }: {
   shipmentId: string;
   editable: boolean;
   data: ShipmentInvoicesDto;
   stops: OutgoingShipmentStopDto[];
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const { formatMoney } = useCurrency();
   const { enqueueSnackbar } = useSnackbar();
@@ -392,15 +408,22 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const addInvoice = useAddShipmentInvoice(shipmentId);
   const deleteInvoice = useDeleteShipmentInvoice(shipmentId);
   const setReadiness = useSetInvoiceReadiness(shipmentId);
+  const fileInvoicing = useFileShipmentInvoicing(shipmentId);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [driftDismissed, setDriftDismissed] = useState(false);
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ShipmentInvoiceDto | null>(null);
+  const [confirmFiling, setConfirmFiling] = useState(false);
 
   const bands = useMemo(() => toBands(data), [data]);
-  // The section is read-only whenever the shipment is, and the server has the final say.
-  const canEdit = editable && (data.isEditable ?? false);
+  const filed = data.isInvoicingFiled ?? false;
+  // The section is read-only whenever the shipment is, and the server has the final say. Filing
+  // closes it for good: past that point these rows are the record of what was filed.
+  const canEdit = editable && (data.isEditable ?? false) && !filed;
+  // Filing needs every row finished — the server refuses otherwise, and a button that only ever
+  // errors is worse than one that says why it is waiting.
+  const unfinished = bands.filter((band) => !band.isReady).length;
   const totals = useMemo(() => sectionTotals(data, bands), [bands, data]);
 
   // Every party key across every multi-party invoice — an invoice with one party renders no
@@ -457,6 +480,16 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
     });
   };
 
+  const handleFiling = () => {
+    fileInvoicing.mutate(undefined, {
+      onSuccess: () => {
+        setConfirmFiling(false);
+        enqueueSnackbar('Fakturace zaevidována — objednávky jsou uzamčené', { variant: 'success' });
+      },
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+    });
+  };
+
   const handleDelete = (invoice: ShipmentInvoiceDto) => {
     deleteInvoice.mutate(invoice.id!, {
       onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny na fakturu plátce', { variant: 'success' }),
@@ -471,9 +504,46 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
           <ReceiptLongOutlinedIcon sx={{ fontSize: 19, color: 'text.secondary' }} />
           <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Fakturace</Typography>
-          <Typography sx={{ ml: 'auto', fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'block' } }}>
+          <Typography sx={{ fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'none', lg: 'block' } }}>
             Rozdělení položek vývozu na faktury — pro fakturaci klientům
           </Typography>
+
+          {/* A spacer rather than `ml: 'auto'` on what follows: this Stack spaces its children
+              with margins, and that rule outranks a child's own sx — the margin quietly won and
+              the button sat next to the subtitle instead of at the edge. */}
+          <Box sx={{ flex: 1 }} />
+
+          {/* The one-way door. Up to here the office moves freely — mark a row, unmark it, correct
+              an order the ordinary way, take the export again. Past it the rows lock, the orders
+              close, and deviations start being recorded against them instead. Which is why it
+              asks first, and why what it says afterwards is who filed it. */}
+          {filed ? (
+            <Tooltip title={filedTooltip(data)}>
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                <Pill tint="okTint" color="success.main" icon={<LockOutlinedIcon sx={{ fontSize: 12 }} />}>
+                  Zaevidováno
+                </Pill>
+              </Box>
+            </Tooltip>
+          ) : editable && (data.isEditable ?? false) && (
+            <Tooltip title={unfinished > 0
+              ? `Nejdřív označte všechny řádky jako hotové (zbývá ${unfinished}).`
+              : 'Zamkne fakturaci i objednávky. Nevratné.'}
+            >
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<LockOutlinedIcon fontSize="small" />}
+                  disabled={unfinished > 0 || fileInvoicing.isPending}
+                  onClick={() => setConfirmFiling(true)}
+                  sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700 }}
+                >
+                  Zaevidovat
+                </Button>
+              </Box>
+            </Tooltip>
+          )}
         </Stack>
 
         <Box sx={{ p: 2.5 }}>
@@ -530,6 +600,8 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
             bands.map((band, index) => {
               const other = otherClientCount(band);
               const orderDetails = bandOrderDetails(band, stops);
+              const orderId = bandOrderId(band, stops);
+              const openOrder = onOpenOrder && orderId ? () => onOpenOrder(orderId) : undefined;
               return (
               <Box
                 key={band.clientId}
@@ -559,7 +631,23 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                               line: two clients can genuinely share a name, and the band header is
                               where the office recognises which one it is looking at. */}
                           <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>
-                            {band.clientName}
+                            {/* The office reads the split and then wants the order behind it. Same
+                                link as the vykládka list uses, and the trading name stays outside
+                                it — what is being opened is the client's order, not the name. */}
+                            {openOrder ? (
+                              <Link
+                                component="button"
+                                type="button"
+                                underline="hover"
+                                onClick={openOrder}
+                                sx={{
+                                  font: 'inherit', color: 'primary.dark', textAlign: 'left',
+                                  verticalAlign: 'baseline',
+                                }}
+                              >
+                                {band.clientName}
+                              </Link>
+                            ) : band.clientName}
                             {band.clientBusinessName && (
                               <Typography
                                 component="span"
@@ -590,24 +678,28 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                         {/* What puts the row in the export file, and what gives it its number. A
                             payer's tick covers its whole group — the sub-clients have no row of
                             their own. Deliberately not a lock: the office can still fix a mistake
-                            found after ticking, exactly as before. */}
-                        {canEdit ? (
-                          <FormControlLabel
-                            sx={{ mr: 0, ml: 0.5, '& .MuiFormControlLabel-label': { fontSize: 12.5 } }}
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={band.isReady}
-                                disabled={setReadiness.isPending}
-                                onChange={(e) => handleReadiness(band, e.target.checked)}
-                                inputProps={{ 'aria-label': `Hotovo – ${band.clientName}` }}
-                                sx={{ p: 0.5 }}
-                              />
-                            }
-                            label="Hotovo"
-                          />
-                        ) : (
-                          band.isReady && <Pill tint="okTint" color="success.main">Hotovo</Pill>
+                            found after ticking, exactly as before.
+
+                            A toggle pill rather than a checkbox, so it reads as one of the states
+                            in the header's chip cluster instead of a form control dropped among
+                            them — and so the read-only view is the same pill without the click.
+                            Only the band being written to goes disabled: one mutation object serves
+                            every band, so gating on isPending alone deadened them all. */}
+                        {(canEdit || band.isReady) && (
+                          <Pill
+                            tint={band.isReady ? 'okTint' : 'greyTint'}
+                            color={band.isReady ? 'success.main' : 'text.secondary'}
+                            icon={band.isReady
+                              ? <CheckIcon sx={{ fontSize: 14 }} />
+                              : <RadioButtonUncheckedIcon sx={{ fontSize: 13 }} />}
+                            onClick={canEdit ? () => handleReadiness(band, !band.isReady) : undefined}
+                            disabled={setReadiness.isPending
+                              && setReadiness.variables?.clientId === band.clientId}
+                            pressed={canEdit ? band.isReady : undefined}
+                            ariaLabel={`${band.isReady ? 'Hotovo' : 'Označit hotovo'} – ${band.clientName}`}
+                          >
+                            {band.isReady ? 'Hotovo' : 'Označit hotovo'}
+                          </Pill>
                         )}
                         {canEdit && (
                           <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
@@ -849,8 +941,34 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         onConfirm={() => confirmDelete && handleDelete(confirmDelete)}
         onClose={() => setConfirmDelete(null)}
       />
+
+      <ConfirmDialog
+        open={confirmFiling}
+        title="Zaevidovat fakturaci?"
+        message={
+          'Řádky se zamknou a objednávky tohoto vývozu už nebude možné upravovat běžnou cestou — '
+          + 'od té chvíle se k nim zaznamenávají změny. Tuto akci nelze vzít zpět.'
+        }
+        confirmLabel="Zaevidovat"
+        destructive={false}
+        busy={fileInvoicing.isPending}
+        onConfirm={handleFiling}
+        onClose={() => setConfirmFiling(false)}
+      />
     </>
   );
+}
+
+/** What the filed pill says on hover: who closed the paperwork, and when. */
+function filedTooltip(data: ShipmentInvoicesDto): string {
+  const parts = [
+    data.invoicingFiledAt ? fmtDate(data.invoicingFiledAt) : undefined,
+    data.invoicingFiledByUserName,
+  ].filter(Boolean);
+
+  return parts.length > 0
+    ? `Fakturace zaevidována ${parts.join(' · ')}. Objednávky jsou uzamčené.`
+    : 'Fakturace je zaevidovaná. Objednávky jsou uzamčené.';
 }
 
 /** The target list groups by client and can run long, so its menu gets a scroll cap and a

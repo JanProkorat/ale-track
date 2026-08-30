@@ -79,6 +79,86 @@ public static class ShipmentExportLabels
     public static string BillingRecipientsHeading(ShipmentExportInvoice invoice) =>
         $"Fakturační adresa pro {invoice.PayingClientName}";
 
+    /// <summary>Heading of a party's list of deviations, in both writers.</summary>
+    public const string Deviations = "Odchylky";
+
+    private static readonly Dictionary<ClientLedgerEntryTarget, string> TargetLabels = new()
+    {
+        [ClientLedgerEntryTarget.ProductQuantity] = "Produkt",
+        [ClientLedgerEntryTarget.SupplierGoodQuantity] = "Zboží od dodavatele",
+        [ClientLedgerEntryTarget.CustomExtraQuantity] = "Položka navíc",
+        [ClientLedgerEntryTarget.ReturnQuantity] = "Vratka",
+        [ClientLedgerEntryTarget.DeliveryAddress] = "Místo dodání",
+        [ClientLedgerEntryTarget.Money] = "Peníze",
+        [ClientLedgerEntryTarget.Other] = "Jiné"
+    };
+
+    /// <summary>
+    /// What one deviation is about: the line it names, or what kind of thing it is when it names
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// The line name wins because it is the more specific of the two, and it is what the reader is
+    /// scanning for — "Pilsner Urquell" locates the correction, "Produkt" does not.
+    /// </remarks>
+    public static string DeviationSubject(ShipmentExportDeviation deviation) =>
+        string.IsNullOrWhiteSpace(deviation.LineName)
+            ? TargetLabels.GetValueOrDefault(deviation.Target, Missing)
+            : deviation.LineName;
+
+    /// <summary>
+    /// What the plan said — a piece count, the address it was going to, or nothing to say.
+    /// </summary>
+    public static string DeviationPlanned(ShipmentExportDeviation deviation) =>
+        deviation switch
+        {
+            { PlannedQuantity: { } quantity } => Pieces(quantity),
+            { PlannedText: { } text } when text.Length > 0 => text,
+            _ => Missing
+        };
+
+    /// <summary>
+    /// What happened instead — pieces, the address it went to, or a debt named in the direction it
+    /// runs.
+    /// </summary>
+    /// <remarks>
+    /// The money case spells the direction out rather than printing a signed number. This is the one
+    /// figure in the file somebody acts on, and a leading minus is too easy to read past.
+    /// </remarks>
+    public static string DeviationActual(ShipmentExportDeviation deviation) =>
+        deviation switch
+        {
+            { ActualQuantity: { } quantity } => Pieces(quantity),
+            { ActualText: { } text } when text.Length > 0 => text,
+            { Amount: { } amount } => amount >= 0
+                ? $"Klient dluží {Money(amount)}"
+                : $"Dlužíme {Money(-amount)}",
+            _ => Missing
+        };
+
+    /// <summary>
+    /// The dispatcher's words, with the follow-up flag appended — a deviation somebody still has to
+    /// settle must say so on the page, not only in the app.
+    /// </summary>
+    public static string DeviationNote(ShipmentExportDeviation deviation)
+    {
+        var parts = new[]
+            {
+                string.IsNullOrWhiteSpace(deviation.Note) ? null : deviation.Note,
+                deviation.RequiresFollowUp ? "k vyřešení" : null
+            }
+            .Where(part => part is not null);
+
+        var note = string.Join(" · ", parts);
+
+        return note.Length > 0 ? note : Missing;
+    }
+
+    /// <summary>
+    /// Money in whole crowns — <c>2 400 Kč</c>. The only currency this project bills in.
+    /// </summary>
+    public static string Money(decimal value) => $"{value.ToString("#,##0", Culture)} Kč";
+
     private static readonly Dictionary<ProductKind, string> KindLabels = new()
     {
         [ProductKind.Keg] = "Sud",

@@ -454,6 +454,12 @@ export interface IClient {
     setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Marks one stop of an outgoing shipment as finished
+     * @return Mark stored
+     */
+    setStopCompletionEndpoint(id: string, stopId: string, data: SetStopCompletionDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -514,6 +520,12 @@ export interface IClient {
     moveInvoiceLineEndpoint(id: string, data: MoveInvoiceLineDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Files the run's invoicing, closing its orders for good
+     * @return Invoicing filed
+     */
+    fileShipmentInvoicingEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Deletes a brewery invoice of an outgoing shipment
      * @return Invoice deleted, its pieces returned to the remainder
      */
@@ -564,9 +576,9 @@ export interface IClient {
 
     /**
      * Updates order for delivery
-     * @return Order updated
+     * @return Order updated, with what the save invalidated on its run
      */
-    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<string>;
+    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<UpdateOrderResultDto>;
 
     /**
      * Deletes order for delivery
@@ -729,6 +741,18 @@ export interface IClient {
     createClientEndpoint(data: CreateClientDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets a client's ledger of deviations
+     * @return The client's ledger entries, newest first
+     */
+    getClientLedgerEntriesEndpoint(id: string, state: ClientLedgerQueryState, signal?: AbortSignal): Promise<ClientLedgerEntryDto[]>;
+
+    /**
+     * Records deviations from the plan for a client
+     * @return Deviations recorded
+     */
+    saveClientLedgerEntriesEndpoint(id: string, data: SaveClientLedgerEntriesDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Gets client detail
      * @return Detail of client
      */
@@ -745,6 +769,30 @@ export interface IClient {
      * @return Accepted
      */
     deleteClientEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Corrects a recorded deviation
+     * @return Entry updated
+     */
+    updateClientLedgerEntryEndpoint(id: string, data: UpdateClientLedgerEntryDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a recorded deviation
+     * @return Entry deleted
+     */
+    deleteClientLedgerEntryEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Settles or reopens a recorded deviation
+     * @return Resolution set
+     */
+    setClientLedgerEntryResolutionEndpoint(id: string, data: SetClientLedgerEntryResolutionDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Hands an open deviation to an order, or takes it back
+     * @return Assignment set
+     */
+    setClientLedgerEntryAssignmentEndpoint(id: string, data: SetClientLedgerEntryAssignmentDto, signal?: AbortSignal): Promise<string>;
 
     /**
      * Gets a client's own product prices
@@ -5542,6 +5590,81 @@ export class Client implements IClient {
     }
 
     /**
+     * Marks one stop of an outgoing shipment as finished
+     * @return Mark stored
+     */
+    setStopCompletionEndpoint(id: string, stopId: string, data: SetStopCompletionDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/stops/{StopId}/completion";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (stopId === undefined || stopId === null)
+            throw new globalThis.Error("The parameter 'stopId' must be defined.");
+        url_ = url_.replace("{StopId}", encodeURIComponent("" + stopId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetStopCompletionEndpoint(_response);
+        });
+    }
+
+    protected processSetStopCompletionEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The run is not on the road", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or stop not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -5726,7 +5849,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Shipment no longer editable, or the remainder invoice was targeted", status, _responseText, _headers);
+            return throwException("Shipment no longer editable, the remainder invoice was targeted, or a column involved is already checked", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -6274,6 +6397,77 @@ export class Client implements IClient {
     }
 
     /**
+     * Files the run's invoicing, closing its orders for good
+     * @return Invoicing filed
+     */
+    fileShipmentInvoicingEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoicing/filed";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PUT",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processFileShipmentInvoicingEndpoint(_response);
+        });
+    }
+
+    protected processFileShipmentInvoicingEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result409 = FailureResponse.fromJS(resultData409);
+            return throwException("The run is cancelled, or some of its invoice rows are not finished", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Deletes a brewery invoice of an outgoing shipment
      * @return Invoice deleted, its pieces returned to the remainder
      */
@@ -6805,9 +6999,9 @@ export class Client implements IClient {
 
     /**
      * Updates order for delivery
-     * @return Order updated
+     * @return Order updated, with what the save invalidated on its run
      */
-    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<string> {
+    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<UpdateOrderResultDto> {
         let url_ = this.baseUrl + "/ale-track/orders/{id}";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
@@ -6831,16 +7025,15 @@ export class Client implements IClient {
         });
     }
 
-    protected processUpdateOrderEndpoint(response: Response): Promise<string> {
+    protected processUpdateOrderEndpoint(response: Response): Promise<UpdateOrderResultDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
+        if (status === 200) {
             return response.text().then((_responseText) => {
-            let result204: any = null;
-            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-                result204 = resultData204 !== undefined ? resultData204 : null as any;
-    
-            return result204;
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = UpdateOrderResultDto.fromJS(resultData200);
+            return result200;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
@@ -6872,7 +7065,7 @@ export class Client implements IClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<string>(null as any);
+        return Promise.resolve<UpdateOrderResultDto>(null as any);
     }
 
     /**
@@ -8550,6 +8743,145 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets a client's ledger of deviations
+     * @return The client's ledger entries, newest first
+     */
+    getClientLedgerEntriesEndpoint(id: string, state: ClientLedgerQueryState, signal?: AbortSignal): Promise<ClientLedgerEntryDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/ledger-entries?";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (state === undefined || state === null)
+            throw new globalThis.Error("The parameter 'state' must be defined and cannot be null.");
+        else
+            url_ += "State=" + encodeURIComponent("" + state) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientLedgerEntriesEndpoint(_response);
+        });
+    }
+
+    protected processGetClientLedgerEntriesEndpoint(response: Response): Promise<ClientLedgerEntryDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ClientLedgerEntryDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientLedgerEntryDto[]>(null as any);
+    }
+
+    /**
+     * Records deviations from the plan for a client
+     * @return Deviations recorded
+     */
+    saveClientLedgerEntriesEndpoint(id: string, data: SaveClientLedgerEntriesDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/ledger-entries";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSaveClientLedgerEntriesEndpoint(_response);
+        });
+    }
+
+    protected processSaveClientLedgerEntriesEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The order belongs to another client", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Client, order or line not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Gets client detail
      * @return Detail of client
      */
@@ -8729,6 +9061,293 @@ export class Client implements IClient {
             let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result403 = FailureResponse.fromJS(resultData403);
             return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Corrects a recorded deviation
+     * @return Entry updated
+     */
+    updateClientLedgerEntryEndpoint(id: string, data: UpdateClientLedgerEntryDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateClientLedgerEntryEndpoint(_response);
+        });
+    }
+
+    protected processUpdateClientLedgerEntryEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a recorded deviation
+     * @return Entry deleted
+     */
+    deleteClientLedgerEntryEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientLedgerEntryEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientLedgerEntryEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Settles or reopens a recorded deviation
+     * @return Resolution set
+     */
+    setClientLedgerEntryResolutionEndpoint(id: string, data: SetClientLedgerEntryResolutionDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}/resolution";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetClientLedgerEntryResolutionEndpoint(_response);
+        });
+    }
+
+    protected processSetClientLedgerEntryResolutionEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Hands an open deviation to an order, or takes it back
+     * @return Assignment set
+     */
+    setClientLedgerEntryAssignmentEndpoint(id: string, data: SetClientLedgerEntryAssignmentDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}/assignment";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetClientLedgerEntryAssignmentEndpoint(_response);
+        });
+    }
+
+    protected processSetClientLedgerEntryAssignmentEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry or order not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result409 = FailureResponse.fromJS(resultData409);
+            return throwException("Entry is settled, or another order carries it", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -16567,6 +17186,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
     adjustments?: InvoiceAdjustmentDto[];
     confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
+    isInvoicingFiled?: boolean;
+    invoicingFiledAt?: Date | undefined;
+    invoicingFiledByUserName?: string | undefined;
 
     constructor(data?: IShipmentInvoicesDto) {
         if (data) {
@@ -16600,6 +17222,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                     this.confirmations!.push(ShipmentInvoiceConfirmationDto.fromJS(item));
             }
             this.isEditable = _data["isEditable"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
+            this.invoicingFiledAt = _data["invoicingFiledAt"] ? new Date(_data["invoicingFiledAt"].toString()) : undefined as any;
+            this.invoicingFiledByUserName = _data["invoicingFiledByUserName"];
         }
     }
 
@@ -16633,6 +17258,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                 data["confirmations"].push(item ? item.toJSON() : undefined as any);
         }
         data["isEditable"] = this.isEditable;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
+        data["invoicingFiledAt"] = this.invoicingFiledAt ? this.invoicingFiledAt.toISOString() : undefined as any;
+        data["invoicingFiledByUserName"] = this.invoicingFiledByUserName;
         return data;
     }
 }
@@ -16643,6 +17271,9 @@ export interface IShipmentInvoicesDto {
     adjustments?: InvoiceAdjustmentDto[];
     confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
+    isInvoicingFiled?: boolean;
+    invoicingFiledAt?: Date | undefined;
+    invoicingFiledByUserName?: string | undefined;
 }
 
 export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
@@ -16813,6 +17444,7 @@ export enum InvoiceLineSourceKind {
     OrderItem = 0,
     CustomExtraItem = 2,
     SupplierGoodItem = 3,
+    LedgerEntry = 4,
 }
 
 export class ShipmentInvoiceBillingRecipientDto implements IShipmentInvoiceBillingRecipientDto {
@@ -16918,6 +17550,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
     number?: number;
     isReady?: boolean;
     lastExportedAt?: Date | undefined;
+    deviationCount?: number;
 
     constructor(data?: IShipmentInvoiceConfirmationDto) {
         if (data) {
@@ -16934,6 +17567,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
             this.number = _data["number"];
             this.isReady = _data["isReady"];
             this.lastExportedAt = _data["lastExportedAt"] ? new Date(_data["lastExportedAt"].toString()) : undefined as any;
+            this.deviationCount = _data["deviationCount"];
         }
     }
 
@@ -16950,6 +17584,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
         data["number"] = this.number;
         data["isReady"] = this.isReady;
         data["lastExportedAt"] = this.lastExportedAt ? this.lastExportedAt.toISOString() : undefined as any;
+        data["deviationCount"] = this.deviationCount;
         return data;
     }
 }
@@ -16959,6 +17594,7 @@ export interface IShipmentInvoiceConfirmationDto {
     number?: number;
     isReady?: boolean;
     lastExportedAt?: Date | undefined;
+    deviationCount?: number;
 }
 
 export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
@@ -16994,6 +17630,7 @@ export interface IGetShipmentInvoicesRequest {
 export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     id?: string;
     state?: OutgoingShipmentState;
+    isInvoicingFiled?: boolean;
     name?: string;
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
@@ -17028,6 +17665,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
         if (_data) {
             this.id = _data["id"];
             this.state = _data["state"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
             this.name = _data["name"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
             this.startPointKind = _data["startPointKind"];
@@ -17098,6 +17736,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["state"] = this.state;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
         data["name"] = this.name;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
         data["startPointKind"] = this.startPointKind;
@@ -17161,6 +17800,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
 export interface IOutgoingShipmentDetailDto {
     id?: string;
     state?: OutgoingShipmentState;
+    isInvoicingFiled?: boolean;
     name?: string;
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
@@ -17185,6 +17825,7 @@ export interface IOutgoingShipmentDetailDto {
 
 export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
     clientIds!: string[];
+    scope?: ShipmentExportScope;
 
     constructor(data?: IExportOutgoingShipmentDto) {
         if (data) {
@@ -17205,6 +17846,7 @@ export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
                 for (let item of _data["clientIds"])
                     this.clientIds!.push(item);
             }
+            this.scope = _data["scope"];
         }
     }
 
@@ -17222,12 +17864,20 @@ export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
             for (let item of this.clientIds)
                 data["clientIds"].push(item);
         }
+        data["scope"] = this.scope;
         return data;
     }
 }
 
 export interface IExportOutgoingShipmentDto {
     clientIds: string[];
+    scope?: ShipmentExportScope;
+}
+
+export enum ShipmentExportScope {
+    Plan = 0,
+    Changed = 1,
+    All = 2,
 }
 
 export class ShipmentVehicleDto implements IShipmentVehicleDto {
@@ -17340,6 +17990,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
+    isInvoiceReady?: boolean;
+    completedAt?: Date | undefined;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -17375,6 +18027,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.selectedAddressKind = _data["selectedAddressKind"];
             this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.isAddressOverridden = _data["isAddressOverridden"];
+            this.isInvoiceReady = _data["isInvoiceReady"];
+            this.completedAt = _data["completedAt"] ? new Date(_data["completedAt"].toString()) : undefined as any;
             this.addressChangedAt = _data["addressChangedAt"] ? new Date(_data["addressChangedAt"].toString()) : undefined as any;
             this.orderDeliveryAddress = _data["orderDeliveryAddress"] ? OrderDeliveryAddressDto.fromJS(_data["orderDeliveryAddress"]) : undefined as any;
             this.label = _data["label"];
@@ -17426,6 +18080,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["selectedAddressKind"] = this.selectedAddressKind;
         data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["isAddressOverridden"] = this.isAddressOverridden;
+        data["isInvoiceReady"] = this.isInvoiceReady;
+        data["completedAt"] = this.completedAt ? this.completedAt.toISOString() : undefined as any;
         data["addressChangedAt"] = this.addressChangedAt ? this.addressChangedAt.toISOString() : undefined as any;
         data["orderDeliveryAddress"] = this.orderDeliveryAddress ? this.orderDeliveryAddress.toJSON() : undefined as any;
         data["label"] = this.label;
@@ -17470,6 +18126,8 @@ export interface IOutgoingShipmentStopDto {
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
+    isInvoiceReady?: boolean;
+    completedAt?: Date | undefined;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -17671,6 +18329,7 @@ export interface IOutgoingShipmentProductDto {
 
 export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentOrderItemDto {
     orderItemId?: string;
+    lineKind?: OrderLineKind;
     note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
@@ -17685,6 +18344,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
         super.init(_data);
         if (_data) {
             this.orderItemId = _data["orderItemId"];
+            this.lineKind = _data["lineKind"];
             this.note = _data["note"];
             this.quantityFromInventory = _data["quantityFromInventory"];
             this.inventoryItemId = _data["inventoryItemId"];
@@ -17703,6 +18363,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
+        data["lineKind"] = this.lineKind;
         data["note"] = this.note;
         data["quantityFromInventory"] = this.quantityFromInventory;
         data["inventoryItemId"] = this.inventoryItemId;
@@ -17715,11 +18376,18 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
 
 export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductDto {
     orderItemId?: string;
+    lineKind?: OrderLineKind;
     note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
     inventoryItemName?: string | undefined;
     inventoryItemAvailable?: number | undefined;
+}
+
+export enum OrderLineKind {
+    Normal = 0,
+    BillOnly = 1,
+    Private = 2,
 }
 
 export class OrderReturnDto implements IOrderReturnDto {
@@ -17940,6 +18608,7 @@ export interface IOutgoingShipmentStockPurchaseItemDto extends IOutgoingShipment
 }
 
 export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplierGoodDto {
+    lineKind?: OrderLineKind;
     id?: string;
     supplierGoodId?: string;
     name?: string;
@@ -17967,6 +18636,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 
     init(_data?: any) {
         if (_data) {
+            this.lineKind = _data["lineKind"];
             this.id = _data["id"];
             this.supplierGoodId = _data["supplierGoodId"];
             this.name = _data["name"];
@@ -17994,6 +18664,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["lineKind"] = this.lineKind;
         data["id"] = this.id;
         data["supplierGoodId"] = this.supplierGoodId;
         data["name"] = this.name;
@@ -18014,6 +18685,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 }
 
 export interface IOutgoingShipmentSupplierGoodDto {
+    lineKind?: OrderLineKind;
     id?: string;
     supplierGoodId?: string;
     name?: string;
@@ -18885,6 +19557,42 @@ export class SetSupplierGoodSourcingDto implements ISetSupplierGoodSourcingDto {
 
 export interface ISetSupplierGoodSourcingDto {
     quantityFromGarage?: number;
+}
+
+export class SetStopCompletionDto implements ISetStopCompletionDto {
+    isCompleted?: boolean;
+
+    constructor(data?: ISetStopCompletionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.isCompleted = _data["isCompleted"];
+        }
+    }
+
+    static fromJS(data: any): SetStopCompletionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetStopCompletionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["isCompleted"] = this.isCompleted;
+        return data;
+    }
+}
+
+export interface ISetStopCompletionDto {
+    isCompleted?: boolean;
 }
 
 export class SetStockPurchaseDto implements ISetStockPurchaseDto {
@@ -19889,6 +20597,9 @@ export class OrderDto implements IOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    isInvoiceReady?: boolean;
+    isInvoicingFiled?: boolean;
+    isContentEditable?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
@@ -19934,6 +20645,9 @@ export class OrderDto implements IOrderDto {
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
+            this.isInvoiceReady = _data["isInvoiceReady"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
+            this.isContentEditable = _data["isContentEditable"];
             this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
     }
@@ -19979,6 +20693,9 @@ export class OrderDto implements IOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        data["isInvoiceReady"] = this.isInvoiceReady;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
+        data["isContentEditable"] = this.isContentEditable;
         data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
@@ -19997,12 +20714,16 @@ export interface IOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    isInvoiceReady?: boolean;
+    isInvoicingFiled?: boolean;
+    isContentEditable?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 
 export class ClientInfoDto implements IClientInfoDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
 
     constructor(data?: IClientInfoDto) {
         if (data) {
@@ -20017,6 +20738,7 @@ export class ClientInfoDto implements IClientInfoDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
         }
     }
 
@@ -20031,6 +20753,7 @@ export class ClientInfoDto implements IClientInfoDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
         return data;
     }
 }
@@ -20038,6 +20761,7 @@ export class ClientInfoDto implements IClientInfoDto {
 export interface IClientInfoDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
 }
 
 export class OrderItemDto implements IOrderItemDto {
@@ -20048,6 +20772,7 @@ export class OrderItemDto implements IOrderItemDto {
     quantity?: number;
     unitPriceWithVat?: number;
     listPriceWithVat?: number | undefined;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -20071,6 +20796,7 @@ export class OrderItemDto implements IOrderItemDto {
             this.quantity = _data["quantity"];
             this.unitPriceWithVat = _data["unitPriceWithVat"];
             this.listPriceWithVat = _data["listPriceWithVat"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
             this.breweryDisplayOrder = _data["breweryDisplayOrder"];
@@ -20094,6 +20820,7 @@ export class OrderItemDto implements IOrderItemDto {
         data["quantity"] = this.quantity;
         data["unitPriceWithVat"] = this.unitPriceWithVat;
         data["listPriceWithVat"] = this.listPriceWithVat;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         data["breweryDisplayOrder"] = this.breweryDisplayOrder;
@@ -20110,6 +20837,7 @@ export interface IOrderItemDto {
     quantity?: number;
     unitPriceWithVat?: number;
     listPriceWithVat?: number | undefined;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -20126,6 +20854,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
     supplierGoodId?: string;
     quantity?: number;
     note?: string | undefined;
+    lineKind?: OrderLineKind;
     goodName?: string | undefined;
     goodSize?: string | undefined;
     supplierId?: string | undefined;
@@ -20148,6 +20877,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
             this.supplierGoodId = _data["supplierGoodId"];
             this.quantity = _data["quantity"];
             this.note = _data["note"];
+            this.lineKind = _data["lineKind"];
             this.goodName = _data["goodName"];
             this.goodSize = _data["goodSize"];
             this.supplierId = _data["supplierId"];
@@ -20170,6 +20900,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
         data["supplierGoodId"] = this.supplierGoodId;
         data["quantity"] = this.quantity;
         data["note"] = this.note;
+        data["lineKind"] = this.lineKind;
         data["goodName"] = this.goodName;
         data["goodSize"] = this.goodSize;
         data["supplierId"] = this.supplierId;
@@ -20185,6 +20916,7 @@ export interface IOrderSupplierGoodItemDto {
     supplierGoodId?: string;
     quantity?: number;
     note?: string | undefined;
+    lineKind?: OrderLineKind;
     goodName?: string | undefined;
     goodSize?: string | undefined;
     supplierId?: string | undefined;
@@ -20295,6 +21027,54 @@ export class GetOrderDetailRequest implements IGetOrderDetailRequest {
 export interface IGetOrderDetailRequest {
 }
 
+export class UpdateOrderResultDto implements IUpdateOrderResultDto {
+    invoicingUnmarked?: boolean;
+    loadingChecksCleared?: number;
+    loadingProductsReset?: number;
+    changedShipmentWork?: boolean;
+
+    constructor(data?: IUpdateOrderResultDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.invoicingUnmarked = _data["invoicingUnmarked"];
+            this.loadingChecksCleared = _data["loadingChecksCleared"];
+            this.loadingProductsReset = _data["loadingProductsReset"];
+            this.changedShipmentWork = _data["changedShipmentWork"];
+        }
+    }
+
+    static fromJS(data: any): UpdateOrderResultDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateOrderResultDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["invoicingUnmarked"] = this.invoicingUnmarked;
+        data["loadingChecksCleared"] = this.loadingChecksCleared;
+        data["loadingProductsReset"] = this.loadingProductsReset;
+        data["changedShipmentWork"] = this.changedShipmentWork;
+        return data;
+    }
+}
+
+export interface IUpdateOrderResultDto {
+    invoicingUnmarked?: boolean;
+    loadingChecksCleared?: number;
+    loadingProductsReset?: number;
+    changedShipmentWork?: boolean;
+}
+
 export class DeleteOrderRequest implements IDeleteOrderRequest {
 
     constructor(data?: IDeleteOrderRequest) {
@@ -20337,6 +21117,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -20379,6 +21160,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.supplierGoodItems = [] as any;
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["settledLedgerEntryIds"])) {
+                this.settledLedgerEntryIds = [] as any;
+                for (let item of _data["settledLedgerEntryIds"])
+                    this.settledLedgerEntryIds!.push(item);
             }
         }
     }
@@ -20423,6 +21209,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.settledLedgerEntryIds)) {
+            data["settledLedgerEntryIds"] = [];
+            for (let item of this.settledLedgerEntryIds)
+                data["settledLedgerEntryIds"].push(item);
+        }
         return data;
     }
 }
@@ -20439,11 +21230,13 @@ export interface IUpdateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 
@@ -20460,6 +21253,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
         if (_data) {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
         }
@@ -20476,6 +21270,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         return data;
@@ -20485,6 +21280,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
 export interface IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 }
@@ -20575,6 +21371,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -20615,6 +21412,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.supplierGoodItems = [] as any;
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["settledLedgerEntryIds"])) {
+                this.settledLedgerEntryIds = [] as any;
+                for (let item of _data["settledLedgerEntryIds"])
+                    this.settledLedgerEntryIds!.push(item);
             }
         }
     }
@@ -20657,6 +21459,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.settledLedgerEntryIds)) {
+            data["settledLedgerEntryIds"] = [];
+            for (let item of this.settledLedgerEntryIds)
+                data["settledLedgerEntryIds"].push(item);
+        }
         return data;
     }
 }
@@ -20671,11 +21478,13 @@ export interface ICreateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 
@@ -20692,6 +21501,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
         if (_data) {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
         }
@@ -20708,6 +21518,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         return data;
@@ -20717,6 +21528,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
 export interface ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 }
@@ -21811,6 +22623,195 @@ export interface ICreateDriverAvailabilityDto {
     until?: Date;
 }
 
+export class ClientLedgerEntryDto implements IClientLedgerEntryDto {
+    id?: string;
+    target?: ClientLedgerEntryTarget;
+    orderId?: string | undefined;
+    orderRequiredDeliveryDate?: Date | undefined;
+    shipmentDeliveryDate?: Date | undefined;
+    stopId?: string | undefined;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    productName?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    goodName?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+    requiresFollowUp?: boolean;
+    resolvedAt?: Date | undefined;
+    resolutionNote?: string | undefined;
+    resolvedByOrderId?: string | undefined;
+    createdAt?: Date;
+    createdByUserName?: string | undefined;
+    resolvedByUserName?: string | undefined;
+
+    constructor(data?: IClientLedgerEntryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.target = _data["target"];
+            this.orderId = _data["orderId"];
+            this.orderRequiredDeliveryDate = _data["orderRequiredDeliveryDate"] ? new Date(_data["orderRequiredDeliveryDate"].toString()) : undefined as any;
+            this.shipmentDeliveryDate = _data["shipmentDeliveryDate"] ? new Date(_data["shipmentDeliveryDate"].toString()) : undefined as any;
+            this.stopId = _data["stopId"];
+            this.orderItemId = _data["orderItemId"];
+            this.productId = _data["productId"];
+            this.productName = _data["productName"];
+            this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.goodName = _data["goodName"];
+            this.customExtraItemId = _data["customExtraItemId"];
+            this.orderReturnId = _data["orderReturnId"];
+            this.lineName = _data["lineName"];
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.plannedText = _data["plannedText"];
+            this.actualText = _data["actualText"];
+            this.amount = _data["amount"];
+            this.note = _data["note"];
+            this.requiresFollowUp = _data["requiresFollowUp"];
+            this.resolvedAt = _data["resolvedAt"] ? new Date(_data["resolvedAt"].toString()) : undefined as any;
+            this.resolutionNote = _data["resolutionNote"];
+            this.resolvedByOrderId = _data["resolvedByOrderId"];
+            this.createdAt = _data["createdAt"] ? new Date(_data["createdAt"].toString()) : undefined as any;
+            this.createdByUserName = _data["createdByUserName"];
+            this.resolvedByUserName = _data["resolvedByUserName"];
+        }
+    }
+
+    static fromJS(data: any): ClientLedgerEntryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientLedgerEntryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["target"] = this.target;
+        data["orderId"] = this.orderId;
+        data["orderRequiredDeliveryDate"] = this.orderRequiredDeliveryDate ? formatDate(this.orderRequiredDeliveryDate) : undefined as any;
+        data["shipmentDeliveryDate"] = this.shipmentDeliveryDate ? this.shipmentDeliveryDate.toISOString() : undefined as any;
+        data["stopId"] = this.stopId;
+        data["orderItemId"] = this.orderItemId;
+        data["productId"] = this.productId;
+        data["productName"] = this.productName;
+        data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["goodName"] = this.goodName;
+        data["customExtraItemId"] = this.customExtraItemId;
+        data["orderReturnId"] = this.orderReturnId;
+        data["lineName"] = this.lineName;
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["plannedText"] = this.plannedText;
+        data["actualText"] = this.actualText;
+        data["amount"] = this.amount;
+        data["note"] = this.note;
+        data["requiresFollowUp"] = this.requiresFollowUp;
+        data["resolvedAt"] = this.resolvedAt ? this.resolvedAt.toISOString() : undefined as any;
+        data["resolutionNote"] = this.resolutionNote;
+        data["resolvedByOrderId"] = this.resolvedByOrderId;
+        data["createdAt"] = this.createdAt ? this.createdAt.toISOString() : undefined as any;
+        data["createdByUserName"] = this.createdByUserName;
+        data["resolvedByUserName"] = this.resolvedByUserName;
+        return data;
+    }
+}
+
+export interface IClientLedgerEntryDto {
+    id?: string;
+    target?: ClientLedgerEntryTarget;
+    orderId?: string | undefined;
+    orderRequiredDeliveryDate?: Date | undefined;
+    shipmentDeliveryDate?: Date | undefined;
+    stopId?: string | undefined;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    productName?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    goodName?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+    requiresFollowUp?: boolean;
+    resolvedAt?: Date | undefined;
+    resolutionNote?: string | undefined;
+    resolvedByOrderId?: string | undefined;
+    createdAt?: Date;
+    createdByUserName?: string | undefined;
+    resolvedByUserName?: string | undefined;
+}
+
+export enum ClientLedgerEntryTarget {
+    ProductQuantity = 0,
+    SupplierGoodQuantity = 1,
+    CustomExtraQuantity = 2,
+    ReturnQuantity = 3,
+    DeliveryAddress = 4,
+    Money = 5,
+    Other = 6,
+}
+
+export class GetClientLedgerEntriesRequest implements IGetClientLedgerEntriesRequest {
+
+    constructor(data?: IGetClientLedgerEntriesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetClientLedgerEntriesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientLedgerEntriesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetClientLedgerEntriesRequest {
+}
+
+export enum ClientLedgerQueryState {
+    Open = 0,
+    All = 1,
+}
+
 export class ClientDto implements IClientDto {
     id?: string;
     name?: string;
@@ -22017,9 +23018,9 @@ export class GetClientDetailRequest implements IGetClientDetailRequest {
 export interface IGetClientDetailRequest {
 }
 
-export class DeleteClientRequest implements IDeleteClientRequest {
+export class DeleteClientLedgerEntryRequest implements IDeleteClientLedgerEntryRequest {
 
-    constructor(data?: IDeleteClientRequest) {
+    constructor(data?: IDeleteClientLedgerEntryRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -22031,9 +23032,9 @@ export class DeleteClientRequest implements IDeleteClientRequest {
     init(_data?: any) {
     }
 
-    static fromJS(data: any): DeleteClientRequest {
+    static fromJS(data: any): DeleteClientLedgerEntryRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new DeleteClientRequest();
+        let result = new DeleteClientLedgerEntryRequest();
         result.init(data);
         return result;
     }
@@ -22044,7 +23045,7 @@ export class DeleteClientRequest implements IDeleteClientRequest {
     }
 }
 
-export interface IDeleteClientRequest {
+export interface IDeleteClientLedgerEntryRequest {
 }
 
 export class UpdateClientDto implements IUpdateClientDto {
@@ -22157,6 +23158,300 @@ export interface IUpdateClientContactDto {
     type?: ContactType;
     description?: string | undefined;
     value?: string;
+}
+
+export class UpdateClientLedgerEntryDto implements IUpdateClientLedgerEntryDto {
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    amount?: number | undefined;
+    lineName?: string | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IUpdateClientLedgerEntryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.amount = _data["amount"];
+            this.lineName = _data["lineName"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): UpdateClientLedgerEntryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateClientLedgerEntryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["amount"] = this.amount;
+        data["lineName"] = this.lineName;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IUpdateClientLedgerEntryDto {
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    amount?: number | undefined;
+    lineName?: string | undefined;
+    note?: string | undefined;
+}
+
+export class SaveClientLedgerEntriesDto implements ISaveClientLedgerEntriesDto {
+    orderId?: string | undefined;
+    rows?: ClientLedgerRowDto[];
+
+    constructor(data?: ISaveClientLedgerEntriesDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.orderId = _data["orderId"];
+            if (Array.isArray(_data["rows"])) {
+                this.rows = [] as any;
+                for (let item of _data["rows"])
+                    this.rows!.push(ClientLedgerRowDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SaveClientLedgerEntriesDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaveClientLedgerEntriesDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["orderId"] = this.orderId;
+        if (Array.isArray(this.rows)) {
+            data["rows"] = [];
+            for (let item of this.rows)
+                data["rows"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISaveClientLedgerEntriesDto {
+    orderId?: string | undefined;
+    rows?: ClientLedgerRowDto[];
+}
+
+export class ClientLedgerRowDto implements IClientLedgerRowDto {
+    target?: ClientLedgerEntryTarget;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IClientLedgerRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.target = _data["target"];
+            this.orderItemId = _data["orderItemId"];
+            this.productId = _data["productId"];
+            this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.customExtraItemId = _data["customExtraItemId"];
+            this.orderReturnId = _data["orderReturnId"];
+            this.lineName = _data["lineName"];
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.plannedText = _data["plannedText"];
+            this.actualText = _data["actualText"];
+            this.amount = _data["amount"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): ClientLedgerRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientLedgerRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["target"] = this.target;
+        data["orderItemId"] = this.orderItemId;
+        data["productId"] = this.productId;
+        data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["customExtraItemId"] = this.customExtraItemId;
+        data["orderReturnId"] = this.orderReturnId;
+        data["lineName"] = this.lineName;
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["plannedText"] = this.plannedText;
+        data["actualText"] = this.actualText;
+        data["amount"] = this.amount;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IClientLedgerRowDto {
+    target?: ClientLedgerEntryTarget;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+}
+
+export class SetClientLedgerEntryResolutionDto implements ISetClientLedgerEntryResolutionDto {
+    resolved?: boolean;
+    note?: string | undefined;
+
+    constructor(data?: ISetClientLedgerEntryResolutionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.resolved = _data["resolved"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): SetClientLedgerEntryResolutionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetClientLedgerEntryResolutionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["resolved"] = this.resolved;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface ISetClientLedgerEntryResolutionDto {
+    resolved?: boolean;
+    note?: string | undefined;
+}
+
+export class DeleteClientRequest implements IDeleteClientRequest {
+
+    constructor(data?: IDeleteClientRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientRequest {
+}
+
+export class SetClientLedgerEntryAssignmentDto implements ISetClientLedgerEntryAssignmentDto {
+    orderId?: string | undefined;
+
+    constructor(data?: ISetClientLedgerEntryAssignmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.orderId = _data["orderId"];
+        }
+    }
+
+    static fromJS(data: any): SetClientLedgerEntryAssignmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetClientLedgerEntryAssignmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["orderId"] = this.orderId;
+        return data;
+    }
+}
+
+export interface ISetClientLedgerEntryAssignmentDto {
+    orderId?: string | undefined;
 }
 
 export class ClientProductPriceDto implements IClientProductPriceDto {

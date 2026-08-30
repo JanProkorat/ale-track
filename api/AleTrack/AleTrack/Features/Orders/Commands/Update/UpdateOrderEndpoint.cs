@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Common.Options;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
@@ -38,7 +39,8 @@ public sealed record UpdateOrderRequest
 /// </remarks>
 public sealed class UpdateOrderEndpoint(
     AleTrackDbContext dbContext,
-    IOptions<CompanyOptions> companyOptions) : Endpoint<UpdateOrderRequest>
+    IOptions<CompanyOptions> companyOptions,
+    IAppContext appContext) : Endpoint<UpdateOrderRequest, UpdateOrderResultDto>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -46,17 +48,16 @@ public sealed class UpdateOrderEndpoint(
         Put("orders/{id}");
         Description(b => b
             .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
-            .Produces<string>(StatusCodes.Status204NoContent)
+            .Produces<UpdateOrderResultDto>()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(UpdateOrderEndpoint))
-            .ClearDefaultProduces(StatusCodes.Status200OK));
+            .WithName(nameof(UpdateOrderEndpoint)));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
                 s.Summary = "Updates order for delivery";
-                s.Responses[StatusCodes.Status204NoContent] = "Order updated";
+                s.Responses[StatusCodes.Status200OK] = "Order updated, with what the save invalidated on its run";
                 s.Responses[StatusCodes.Status400BadRequest] = "Order is closed or already loaded; its content is frozen";
             }
         );
@@ -80,6 +81,14 @@ public sealed class UpdateOrderEndpoint(
             // state — order items are the shipment's content.
             .Include(o => o.OutgoingShipmentStop)
                 .ThenInclude(s => s!.OutgoingShipment)
+                    // The rows the office has marked finished: a change to what is billed here
+                    // has to un-mark the one covering this order — see UnmarkInvoicing.
+                    .ThenInclude(sh => sh.InvoiceConfirmations)
+            .Include(o => o.OutgoingShipmentStop)
+                .ThenInclude(s => s!.OutgoingShipment)
+                    // And how far each of its products got through loading, for the same reason
+                    // — see ResetLoadingStates.
+                    .ThenInclude(sh => sh.LoadingStates)
             .FirstOrDefaultAsync(ct);
 
         if (order is null)
@@ -96,6 +105,15 @@ public sealed class UpdateOrderEndpoint(
         // when the (kind, placeId) pair itself is left untouched.
         var clientChanged = req.Data.ClientId != order!.Client.PublicId;
 
+        // Read before anything is applied, and remembered across the save: a marked invoice row
+        // says somebody checked this order against the paperwork, so changing what is billed has
+        // to send it back for checking. The payer is captured too, because changing the client
+        // moves the order to a different row.
+        var billedContentChanged = RequestChangesBilledContent(order, req.Data);
+        var payerBefore = InvoiceReadiness.RowClientIdOf(order);
+        var loadingChecksCleared = 0;
+        var loadingProductsReset = 0;
+
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
 
         if (contentEditable)
@@ -109,9 +127,9 @@ public sealed class UpdateOrderEndpoint(
                 order.Client = client!;
             }
 
-            // Only needed by the rebuild below. Kept inside the branch because it filters out
-            // retired products, which would otherwise reject a notes-only save of an order
-            // containing a since-retired one.
+            // Only needed by the merge below, for the lines it has to create. Kept inside the
+            // branch because it filters out retired products, which would otherwise reject a
+            // notes-only save of an order containing a since-retired one.
             var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
 
             // Both are optional patches: omitted means "leave as stored". They belong to the
@@ -119,37 +137,29 @@ public sealed class UpdateOrderEndpoint(
             order.ActualDeliveryDate = req.Data.ActualDeliveryDate ?? order.ActualDeliveryDate;
             order.State = req.Data.State ?? order.State;
 
-            var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
-                dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
-
-            if (addressChanged || clientChanged)
-                await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
-
-            // Destructive by design: the items are replaced, not merged, so every save hands
-            // out fresh row IDs. outgoing_shipment_invoice_lines.order_item_id is Cascade, so
-            // running this on a closed order deleted that order's invoice lines outright.
-            // Skipping the rebuild — rather than rebuilding and then comparing — is what keeps
-            // the rows, and the invoice lines hanging off them, alive.
-            order.OrderItems.Clear();
-
-            foreach (var orderItem in req.Data.OrderItems)
-            {
-                var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
-                if (relatedProduct is null)
-                    ThrowHelper.PublicEntityNotFound(nameof(Product), orderItem.ProductId);
-
-                order.OrderItems.Add(new OrderItem
-                {
-                    Product = relatedProduct!,
-                    Quantity = orderItem.Quantity,
-                    ReminderState = orderItem.ReminderState
-                });
-            }
+            var merge = MergeOrderItems(req.Data.OrderItems, order, products);
+            loadingChecksCleared += merge.LoadingChecksCleared;
+            loadingProductsReset += ResetLoadingStates(order, merge.MovedProductIds);
         }
+
+        await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
+
+        var invoicingUnmarked = billedContentChanged && UnmarkInvoicing(order, payerBefore);
+
+        // Which of the client's open points this order promises to settle. Outside the freeze
+        // gate: it records an intention about the ledger, not the order's content, and the
+        // entries close only when the order is delivered.
+        await ClientLedgerAssignment.AssignAsync(dbContext, order, req.Data.SettledLedgerEntryIds, ct);
+
+        // Cancelling the order withdraws every promise it was carrying, so those points go back
+        // to being open. Cancelling the *shipment* deliberately does not — that only frees the
+        // order for re-planning, and it still carries the debt.
+        if (order.State is OrderState.Cancelled)
+            await ClientLedgerAssignment.ReleaseForCancelledOrderAsync(dbContext, order.Id, ct);
 
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
-        order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
+        order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order, ref loadingChecksCleared);
         order.SupplierGoodItems = await GetSupplierGoodItemsAsync(req.Data.SupplierGoodItems, order, ct);
         ApplyItemNotes(req.Data.OrderItems, order);
 
@@ -159,7 +169,139 @@ public sealed class UpdateOrderEndpoint(
         await PickupStopSync.ForOrderAsync(dbContext, order.PublicId, companyOptions.Value, ct);
 
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+
+        await Send.OkAsync(new UpdateOrderResultDto
+        {
+            InvoicingUnmarked = invoicingUnmarked,
+            LoadingChecksCleared = loadingChecksCleared,
+            LoadingProductsReset = loadingProductsReset
+        }, ct);
+    }
+
+    /// <summary>
+    /// Applies the requested delivery address and pushes it onto the order's stop.
+    /// </summary>
+    /// <remarks>
+    /// Its own pass outside the <c>contentEditable</c> branch, like <see cref="ApplyItemNotes"/>,
+    /// and deliberately absent from <see cref="RequestChangesFrozenContent"/>. What freezes when
+    /// the truck is packed is what is on it; where a client takes delivery is something that
+    /// client can still change afterwards — ringing mid-run to say they cannot make it to the
+    /// agreed address is the commonest deviation there is. Refusing it left the dispatcher with
+    /// nowhere to record what happened, so the move is allowed and
+    /// <see cref="OrderDeliveryAddressWriter.PropagateToStopAsync"/> writes it into the client's
+    /// ledger.
+    ///
+    /// A closed order is still excluded: moving a delivery that has already happened would be
+    /// rewriting history rather than recording it. The stop's own guard refuses a delivered or
+    /// cancelled run for the same reason.
+    /// </remarks>
+    private async Task ApplyDeliveryAddressAsync(
+        UpdateOrderDto data, Order order, bool clientChanged, CancellationToken ct)
+    {
+        if (order.State is OrderState.Finished or OrderState.Cancelled)
+            return;
+
+        var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext, order, order.Client, data.DeliveryAddressKind, data.ClientDeliveryPlaceId, ct);
+
+        if (!addressChanged && !clientChanged)
+            return;
+
+        // The author is passed through because propagation may record a change of destination in
+        // the client's ledger, and who moved a delivery is worth knowing.
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct, userId);
+    }
+
+    /// <summary>
+    /// Whether the request changes anything the invoice bills for.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="RequestChangesFrozenContent"/> on purpose. A reminder flag or a
+    /// note is not on an invoice, and neither is the delivered date; sending a marked row back
+    /// for checking over one of those would teach the office to ignore the mark. Returns are out
+    /// for the same reason — empties are deposits, not billed pieces.
+    ///
+    /// Supplier goods and custom extras are in, unlike in the freeze predicate: they are lines of
+    /// the invoice, so a changed quantity there is exactly what somebody has to re-check.
+    /// </remarks>
+    private static bool RequestChangesBilledContent(Order order, UpdateOrderDto data)
+    {
+        if (data.ClientId != order.Client.PublicId)
+            return true;
+
+        var storedItems = order.OrderItems
+            .Select(i => (i.Product.PublicId, i.Quantity))
+            .OrderBy(i => i.PublicId).ThenBy(i => i.Quantity)
+            .ToList();
+
+        var incomingItems = data.OrderItems
+            .Select(i => (PublicId: i.ProductId, i.Quantity))
+            .OrderBy(i => i.PublicId).ThenBy(i => i.Quantity)
+            .ToList();
+
+        if (!storedItems.SequenceEqual(incomingItems))
+            return true;
+
+        var storedGoods = order.SupplierGoodItems
+            .Where(g => g.SupplierGood is not null)
+            .Select(g => (g.SupplierGood!.PublicId, g.Quantity))
+            .OrderBy(g => g.PublicId).ThenBy(g => g.Quantity)
+            .ToList();
+
+        var incomingGoods = (data.SupplierGoodItems ?? [])
+            .Select(g => (PublicId: g.SupplierGoodId, g.Quantity))
+            .OrderBy(g => g.PublicId).ThenBy(g => g.Quantity)
+            .ToList();
+
+        if (!storedGoods.SequenceEqual(incomingGoods))
+            return true;
+
+        var storedExtras = order.CustomExtraItems
+            .Select(e => (e.Description, e.Quantity))
+            .OrderBy(e => e.Description).ThenBy(e => e.Quantity)
+            .ToList();
+
+        var incomingExtras = (data.CustomExtraItems ?? [])
+            .Select(e => (e.Description, e.Quantity))
+            .OrderBy(e => e.Description).ThenBy(e => e.Quantity)
+            .ToList();
+
+        return !storedExtras.SequenceEqual(incomingExtras);
+    }
+
+    /// <summary>
+    /// Sends the invoice row covering this order back for checking.
+    /// </summary>
+    /// <remarks>
+    /// The number is kept, exactly as un-marking by hand keeps it — re-marking then gives the
+    /// same one back and no number is ever printed against two clients.
+    ///
+    /// Both payers when the client moved: the row the order used to sit on has to lose its mark
+    /// too, because what it was checked against has left it. A filed run is left alone — nothing
+    /// there can be edited anyway, and the marks are the record of what was filed.
+    /// </remarks>
+    private static bool UnmarkInvoicing(Order order, long payerBefore)
+    {
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is null || shipment.IsInvoicingFiled)
+            return false;
+
+        // The payer read off the navigation, not off the FK: the client may have been reassigned a
+        // moment ago and the key still points at the old one until EF fixes it up, which would
+        // leave the new row marked as checked against goods that have only just arrived on it.
+        var payerAfter = order.Client.InvoicingClientId ?? order.Client.Id;
+        var payers = new[] { payerBefore, payerAfter };
+        var unmarked = false;
+
+        foreach (var confirmation in shipment.InvoiceConfirmations.Where(c => payers.Contains(c.ClientId) && c.IsReady))
+        {
+            confirmation.IsReady = false;
+            unmarked = true;
+        }
+
+        return unmarked;
     }
 
     /// <summary>
@@ -173,11 +315,14 @@ public sealed class UpdateOrderEndpoint(
     {
         // State and ActualDeliveryDate are compared only when the request carries them:
         // omitted means "leave as stored", which is by definition not a change.
+        //
+        // The delivery address is deliberately not compared — see ApplyDeliveryAddressAsync,
+        // which writes it in its own pass. Changing the *client*, on the other hand, still is
+        // frozen content: that is not a client moving their own delivery, it is a different
+        // client's goods on a packed truck.
         if (data.ClientId != order.Client.PublicId
             || (data.State is not null && data.State != order.State)
-            || (data.ActualDeliveryDate is not null && data.ActualDeliveryDate != order.ActualDeliveryDate)
-            || data.DeliveryAddressKind != order.DeliveryAddressKind
-            || data.ClientDeliveryPlaceId != order.ClientDeliveryPlace?.PublicId)
+            || (data.ActualDeliveryDate is not null && data.ActualDeliveryDate != order.ActualDeliveryDate))
             return true;
 
         var storedItems = order.OrderItems
@@ -193,6 +338,150 @@ public sealed class UpdateOrderEndpoint(
             .ToList();
 
         return !storedItems.SequenceEqual(incomingItems);
+    }
+
+    /// <summary>
+    /// Merges the posted item lines into the persisted ones, pairing them on the product.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilding the collection handed out fresh row IDs on every save, and
+    /// <see cref="OrderItem"/> carries three fields the order does not own —
+    /// <see cref="OrderItem.IsShipmentLoadingConfirmed"/>, ticked off while packing, plus
+    /// <see cref="OrderItem.QuantityFromInventory"/> and
+    /// <see cref="OrderItem.InventoryItemId"/>, set when the sourcing is split. All three sit
+    /// on a shipment still in <c>Created</c>, which is exactly when the order is also still
+    /// editable, so any save reset them silently. The new row also took the old one's invoice
+    /// line with it, <c>outgoing_shipment_invoice_lines.order_item_id</c> being Cascade.
+    ///
+    /// Pairing on the product is safe for the same reason <see cref="ApplyItemNotes"/> relies
+    /// on: the order editor increments an existing cart line rather than adding a second one
+    /// for the same product, so a product appears at most once.
+    ///
+    /// A line the save leaves out is still removed, and its invoice line still cascades away —
+    /// merging is about the lines that stay, not about never deleting one.
+    /// </remarks>
+    private static ItemMergeResult MergeOrderItems(
+        List<UpdateOrderItemDto> posted,
+        Order order,
+        List<Product> products)
+    {
+        var loadingChecksCleared = 0;
+        var movedProductIds = new HashSet<long>();
+
+        // Dropped on the same key the match below uses: a stored line whose product is still on
+        // the order but whose kind is gone is a line the save no longer has.
+        var dropped = order.OrderItems
+            .Where(stored => posted.All(p =>
+                p.ProductId != stored.Product.PublicId || p.LineKind != stored.LineKind))
+            .ToList();
+
+        foreach (var stored in dropped)
+        {
+            // The run carries fewer of this product than it was loaded with.
+            movedProductIds.Add(stored.ProductId);
+            order.OrderItems.Remove(stored);
+        }
+
+        foreach (var line in posted)
+        {
+            // Matched on the product AND the kind: one product can sit on an order twice, once as
+            // goods to deliver and once as pieces the client already has and only owes money for.
+            // Matching on the product alone silently merged the two, and the merged line was
+            // loaded — billing pieces is not the same instruction as carrying them.
+            var existing = order.OrderItems.FirstOrDefault(i =>
+                i.Product.PublicId == line.ProductId && i.LineKind == line.LineKind);
+
+            if (existing is not null)
+            {
+                // A ticked-off line whose count changes has not been checked at that count. The
+                // tick says somebody counted these pieces into the van; leaving it standing would
+                // have the ramp trust a number nobody read.
+                if (existing.Quantity != line.Quantity)
+                {
+                    movedProductIds.Add(existing.ProductId);
+
+                    if (existing.IsShipmentLoadingConfirmed)
+                    {
+                        existing.IsShipmentLoadingConfirmed = false;
+                        loadingChecksCleared++;
+                    }
+                }
+
+                existing.Quantity = line.Quantity;
+                existing.ReminderState = line.ReminderState;
+
+                // Clamped, not re-seeded, exactly as GetSupplierGoodItemsAsync treats the
+                // garage split: the sourcing is a decision somebody made on the shipment, and
+                // cutting the ordered quantity is no reason to throw it away.
+                existing.QuantityFromInventory =
+                    SupplierGoodSourcing.Clamp(existing.QuantityFromInventory, line.Quantity);
+
+                // Nothing left to source means nothing left to source it from — the stock link
+                // is documented as null whenever no pieces come out of inventory.
+                if (existing.QuantityFromInventory == 0)
+                {
+                    existing.InventoryItem = null;
+                    existing.InventoryItemId = null;
+                }
+
+                continue;
+            }
+
+            var relatedProduct = products.FirstOrDefault(p => p.PublicId == line.ProductId);
+            if (relatedProduct is null)
+                ThrowHelper.PublicEntityNotFound(nameof(Product), line.ProductId);
+
+            movedProductIds.Add(relatedProduct!.Id);
+
+            order.OrderItems.Add(new OrderItem
+            {
+                Product = relatedProduct!,
+                Quantity = line.Quantity,
+                ReminderState = line.ReminderState,
+                LineKind = line.LineKind
+            });
+        }
+
+        return new ItemMergeResult(loadingChecksCleared, movedProductIds);
+    }
+
+    /// <summary>
+    /// What merging the posted lines disturbed: the ticks it had to clear, and the products whose
+    /// count on this run moved.
+    /// </summary>
+    private sealed record ItemMergeResult(int LoadingChecksCleared, HashSet<long> MovedProductIds);
+
+    /// <summary>
+    /// Sends the loading of every product whose count moved back to the beginning.
+    /// </summary>
+    /// <remarks>
+    /// The nakládka's own row is per product per brewery-invoice column, and it aggregates every
+    /// order on the run that carries that product. So "read out and counted back, 10 pieces" stops
+    /// being true the moment one of those orders asks for twelve — and the row cannot be corrected,
+    /// only re-done, because nobody knows which of the twelve were counted.
+    ///
+    /// Deliberately the whole product across the run, and deliberately the strong reset: the ramp
+    /// reads out and counts back again. Both passes were done against a number that no longer
+    /// exists, so keeping the first would only make the row lie more quietly.
+    ///
+    /// NotLoaded is the absence of a row, exactly as <c>SetLoadingStateEndpoint</c> writes it —
+    /// hence removing rather than rewriting. A filed run is left alone: its content cannot move.
+    /// </remarks>
+    private static int ResetLoadingStates(Order order, HashSet<long> movedProductIds)
+    {
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is null || shipment.IsInvoicingFiled || movedProductIds.Count == 0)
+            return 0;
+
+        var stale = shipment.LoadingStates
+            .Where(state => movedProductIds.Contains(state.ProductId))
+            .ToList();
+
+        foreach (var state in stale)
+            shipment.LoadingStates.Remove(state);
+
+        return stale.Select(state => state.ProductId).Distinct().Count();
     }
 
     /// <summary>
@@ -243,10 +532,17 @@ public sealed class UpdateOrderEndpoint(
 
     /// <summary>
     /// Diffs posted custom extras against the persisted ones, like returns and notes.
-    /// <see cref="OrderCustomExtraItem.IsShipmentLoadingConfirmed"/> is left alone —
-    /// it belongs to the shipment, and an order edit must not un-confirm a loaded item.
     /// </summary>
-    private static List<OrderCustomExtraItem> GetCustomExtras(List<OrderCustomExtraItemDto> extras, Order order)
+    /// <remarks>
+    /// <see cref="OrderCustomExtraItem.IsShipmentLoadingConfirmed"/> survives an edit that leaves
+    /// the count alone — renaming a line or adding a note does not un-check what was counted into
+    /// the van. A changed count does clear it: the tick says somebody counted these pieces, and at
+    /// a different number nobody has.
+    /// </remarks>
+    private static List<OrderCustomExtraItem> GetCustomExtras(
+        List<OrderCustomExtraItemDto> extras,
+        Order order,
+        ref int loadingChecksCleared)
     {
         var result = extras
             .Where(e => e.Id is null)
@@ -256,6 +552,13 @@ public sealed class UpdateOrderEndpoint(
         foreach (var e in extras.Where(e => e.Id is not null && order.CustomExtraItems.Any(x => x.PublicId == e.Id!.Value)))
         {
             var existing = order.CustomExtraItems.First(x => x.PublicId == e.Id!.Value);
+
+            if (existing.Quantity != e.Quantity && existing.IsShipmentLoadingConfirmed)
+            {
+                existing.IsShipmentLoadingConfirmed = false;
+                loadingChecksCleared++;
+            }
+
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;
             existing.Note = e.Note;
@@ -297,6 +600,7 @@ public sealed class UpdateOrderEndpoint(
                 SupplierGood = good!,
                 Quantity = i.Quantity,
                 Note = i.Note,
+                LineKind = i.LineKind,
                 QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good!, i.Quantity)
             });
         }
@@ -349,6 +653,18 @@ public sealed class UpdateOrderEndpoint(
                 item.Note = posted.Note;
             }
         }
+    }
+
+    private async Task<long?> ResolveCurrentUserIdAsync(CancellationToken ct)
+    {
+        if (appContext.UserId is null)
+            return null;
+
+        var user = await dbContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.PublicId == appContext.UserId, ct);
+
+        return user?.Id;
     }
 
     private async Task<List<Product>> GetExistingProductsAsync(List<UpdateOrderItemDto> orderItems, CancellationToken ct)

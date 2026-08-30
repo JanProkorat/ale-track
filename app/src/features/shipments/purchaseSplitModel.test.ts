@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { OutgoingShipmentPurchaseInvoiceDto, OutgoingShipmentPurchaseInvoiceLineDto } from 'src/generated/api-client';
+import {
+  OutgoingShipmentLoadingStateDto,
+  OutgoingShipmentPurchaseInvoiceDto,
+  OutgoingShipmentPurchaseInvoiceLineDto,
+  ShipmentLoadingState,
+} from 'src/generated/api-client';
 import {
   purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt, applyLineLocally, rowsOnInvoice,
-  type PurchasableRow,
+  checkedBlocker, type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
 
 const LEZAK = 'p-lezak';
@@ -224,5 +229,42 @@ describe('columnTotals', () => {
 
   it('has an entry per default column even with no rows and no invoices', () => {
     expect(columnTotals([], [])).toEqual([0, 0]);
+  });
+});
+
+describe('checkedBlocker', () => {
+  // The wire carries the enum's name while the generated enum is numeric - see loadingStateAt.
+  function state(productId: string, sequence: number, value: LoadingStateName) {
+    const dto = new OutgoingShipmentLoadingStateDto();
+    dto.productId = productId;
+    dto.sequence = sequence;
+    dto.state = value as unknown as ShipmentLoadingState;
+    return dto;
+  }
+
+  it('names the remainder column when that is what has been checked', () => {
+    expect(checkedBlocker([state(LEZAK, 1, 'Checked')], LEZAK, 2)).toBe(1);
+  });
+
+  it('names the target column when it is the checked one', () => {
+    expect(checkedBlocker([state(LEZAK, 2, 'Checked')], LEZAK, 2)).toBe(2);
+  });
+
+  it('prefers the remainder when both ends are checked', () => {
+    const states = [state(LEZAK, 1, 'Checked'), state(LEZAK, 2, 'Checked')];
+    expect(checkedBlocker(states, LEZAK, 2)).toBe(1);
+  });
+
+  it('blocks nothing while the counts are only dictated', () => {
+    const states = [state(LEZAK, 1, 'Dictated'), state(LEZAK, 2, 'Dictated')];
+    expect(checkedBlocker(states, LEZAK, 2)).toBeUndefined();
+  });
+
+  it('ignores a column the move does not touch', () => {
+    expect(checkedBlocker([state(LEZAK, 3, 'Checked')], LEZAK, 2)).toBeUndefined();
+  });
+
+  it('ignores another product entirely', () => {
+    expect(checkedBlocker([state(IPA, 1, 'Checked')], LEZAK, 2)).toBeUndefined();
   });
 });

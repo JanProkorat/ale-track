@@ -219,7 +219,7 @@ public sealed class SupplierStopRoundTripTests
     private static async Task Act(Fixture f)
     {
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(f.DbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped());
+            .Create(f.DbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(f.Request, CancellationToken.None);
     }

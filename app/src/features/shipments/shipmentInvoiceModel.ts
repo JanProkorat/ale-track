@@ -50,6 +50,9 @@ export interface ClientBand {
   /** When an export last carried this row, or undefined while none has. What the export drawer
    *  preselects by. */
   lastExportedAt?: Date;
+  /** Deviations recorded against this client's order on the run — 0 until the invoicing is filed,
+   *  since that is when they start being recorded. What the export drawer offers "jen změny" by. */
+  deviationCount: number;
   invoices: ShipmentInvoiceDto[];
   /** Billed pieces only — private ones are counted separately. */
   quantity: number;
@@ -217,6 +220,7 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
         number: confirmation?.number,
         isReady: confirmation?.isReady ?? false,
         lastExportedAt: confirmation?.lastExportedAt,
+        deviationCount: confirmation?.deviationCount ?? 0,
         invoices: [],
         quantity: 0,
         value: 0,
@@ -386,6 +390,20 @@ function stopForBand(
   return band.stopOrder != null
     ? stops.find((s) => s.order === band.stopOrder)
     : stops.find((s) => s.clientId === band.clientId);
+}
+
+/**
+ * The order this band's client takes delivery on, for the header's link to it.
+ *
+ * Undefined for a payer linked to another client's order, which holds no stop of its own — and for
+ * a band whose stop is not an order stop at all. The header renders plain text there rather than a
+ * link to nothing.
+ */
+export function bandOrderId(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): string | undefined {
+  return stopForBand(band, stops)?.orderId;
 }
 
 /** Where a band's goods are actually delivered, for the Fakturace header.

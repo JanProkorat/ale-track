@@ -22,8 +22,8 @@ import type {
   OutgoingShipmentPurchaseInvoiceDto,
 } from 'src/generated/api-client';
 import {
-  capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
-  type LoadingStateName, type PurchasableRow,
+  capFor, checkedBlocker, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn,
+  purchasedTotal, type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { stepperTracks } from './nakladkaControls';
@@ -132,6 +132,7 @@ export function PurchaseInvoiceRowCells({
                   max={capFor(row, invoices, column.sequence)}
                   onCommit={(quantity) => onSet(column.sequence, quantity)}
                   label={`Kusy na faktuře ${column.sequence}`}
+                  lockedBy={checkedBlocker(states, row.productId, column.sequence)}
                 />
               ) : (
                 <Typography sx={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{claimed}</Typography>
@@ -287,6 +288,7 @@ export function PurchaseInvoiceChips({
                 max={cap}
                 onCommit={(quantity) => onSet(column.sequence, quantity)}
                 label={`Kusy na faktuře ${column.sequence}`}
+                lockedBy={checkedBlocker(states, row.productId, column.sequence)}
               />
             ) : (
               // The same three tracks the steppers use, with the button cells left empty —
@@ -465,34 +467,45 @@ function StepperCells({ children }: { children: ReactNode }) {
  * not be 24 clicks. Typing commits on blur or Enter rather than per keystroke —
  * every keystroke would be a request, and an intermediate value would be clamped
  * against the wrong remainder on the way through.
+ *
+ * `lockedBy` freezes the whole control — buttons and field alike — once one end of the
+ * move has been counted a second time; see {@link checkedBlocker}. Frozen rather than
+ * hidden, because the number still has to be readable, and the tooltip is the only place
+ * that can say which column is holding it shut.
  */
 function QuantityStepper({
-  value, max, onCommit, label,
+  value, max, onCommit, label, lockedBy,
 }: {
   value: number;
   max: number;
   onCommit: (quantity: number) => void;
   label: string;
+  /** Column whose checked state blocks this one, if any. */
+  lockedBy?: number;
 }) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
+  const locked = lockedBy !== undefined;
 
   function commit(next: number) {
+    if (locked) return;
+
     const clamped = Math.max(0, Math.min(next, max));
     setText(String(clamped));
     if (clamped !== value) onCommit(clamped);
   }
 
-  return (
+  const cells = (
     <StepperCells>
       <StepperButton
         sign={-1}
         onClick={() => commit(value - 1)}
-        disabled={value <= 0}
+        disabled={locked || value <= 0}
         label={`${label} — ubrat`}
       />
       <InputBase
         value={text}
+        readOnly={locked}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => commit(parseInt(text, 10) || 0)}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -510,9 +523,17 @@ function QuantityStepper({
       <StepperButton
         sign={1}
         onClick={() => commit(value + 1)}
-        disabled={value >= max}
+        disabled={locked || value >= max}
         label={`${label} — přidat`}
       />
     </StepperCells>
+  );
+
+  if (!locked) return cells;
+
+  return (
+    <Tooltip title={`F${lockedBy} je zkontrolovaná — kusy už nelze přesouvat`}>
+      <Box component="span" sx={{ display: 'inline-flex' }}>{cells}</Box>
+    </Tooltip>
   );
 }

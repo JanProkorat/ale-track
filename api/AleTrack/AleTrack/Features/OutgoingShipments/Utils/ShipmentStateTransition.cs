@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -59,6 +60,17 @@ public static class ShipmentStateTransition
         if (next is OutgoingShipmentState.Loaded && shipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
 
+        // Nakládka is pieces going into one particular van: the loading list is checked off
+        // against its capacity, and the state freezes the run's content as loaded. Neither means
+        // anything without knowing which vehicle it was loaded into. The driver and the date are
+        // not required here — they are what leaving needs, which is the check below.
+        // The navigation as well as the key: the full PUT can assign a van and ask for Loaded in
+        // one request, and EF fills the foreign key only on save — reading the key alone would
+        // reject the very request that supplies the van.
+        if (next is OutgoingShipmentState.Loaded
+            && shipment.VehicleId is null && shipment.Vehicle is null)
+            ThrowHelper.ShipmentCannotBeLoadedWithoutVehicle();
+
         if (next is OutgoingShipmentState.Delivered or OutgoingShipmentState.InTransit
             && !shipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(next);
@@ -87,10 +99,28 @@ public static class ShipmentStateTransition
         var isRevertingToCreated = previous != OutgoingShipmentState.Created && next == OutgoingShipmentState.Created;
         var isTransitioningToDelivered = previous != OutgoingShipmentState.Delivered
                                          && next == OutgoingShipmentState.Delivered;
+        // A round that is being taken back: the stops the drivers reported as done did not happen,
+        // or are about to happen again. Loaded and Cancelled are the only two ways off the road
+        // that are not Delivered (see ShipmentMutability.IsTransitionAllowed).
+        var isLeavingTheRoad = previous == OutgoingShipmentState.InTransit
+                               && next is OutgoingShipmentState.Loaded or OutgoingShipmentState.Cancelled;
 
         shipment.State = next;
 
         ApplyToOrders(shipment, next);
+
+        // Delivered is where an order settles the deviations it was carrying. Hooked to the same
+        // edge that turns its orders Finished, so "the debt is closed" cannot drift away from
+        // "the goods arrived".
+        if (isTransitioningToDelivered)
+        {
+            var deliveredOrders = shipment.Stops
+                .Where(s => s.ClientOrder is not null)
+                .Select(s => s.ClientOrder!)
+                .ToList();
+
+            await ClientLedgerAssignment.SettleForDeliveredOrdersAsync(dbContext, deliveredOrders, DateTime.UtcNow, ct);
+        }
 
         // Before the reset below, which zeroes the very quantities the return reads.
         if (isReturningStock)
@@ -111,6 +141,15 @@ public static class ShipmentStateTransition
         // rebuilt on the next transition into Loaded.
         if (isRevertingToCreated)
             ShipmentContentSnapshotWriter.Clear(shipment);
+
+        // The per-stop "finished" marks are notes about one journey. Keeping them across a revert
+        // would start the next attempt with stops already ticked off, which is worse than losing
+        // what was only ever a progress note.
+        if (isLeavingTheRoad)
+        {
+            foreach (var stop in shipment.Stops)
+                stop.CompletedAt = null;
+        }
 
         if (isTransitioningToDelivered && shipment.StockPurchases.Count > 0)
             await AddStockPurchasesToInventoryAsync(dbContext, shipment.StockPurchases, ct);

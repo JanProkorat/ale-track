@@ -93,6 +93,8 @@ public sealed class SetInvoiceBillingRecipientsEndpoint(AleTrackDbContext dbCont
             return;
         }
 
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
+
         var invoice = shipment.Invoices.FirstOrDefault(i => i.PublicId == req.InvoiceId);
         if (invoice is null)
         {

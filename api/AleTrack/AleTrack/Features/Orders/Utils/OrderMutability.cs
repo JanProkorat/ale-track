@@ -10,13 +10,20 @@ namespace AleTrack.Features.Orders.Utils;
 public static class OrderMutability
 {
     /// <summary>
-    /// Frozen once the order itself is closed, or once the shipment carrying it has been
-    /// packed.
+    /// Frozen once the order itself is closed, once its run is finished, or once that run's
+    /// invoicing has been filed.
     /// </summary>
     /// <remarks>
-    /// Mirrors <c>ShipmentMutability.IsContentEditable</c>, because order items <em>are</em>
-    /// the shipment's content. Guarding only the order's own terminal states would leave a
-    /// back door through the order screen straight into a packed shipment.
+    /// Filing is what closes an order, not packing the van. An order legitimately changes while
+    /// the run is loaded and while it is on the road — a client rings up, a pallet will not fit,
+    /// the office spots a wrong line — and none of that is a deviation to be recorded beside the
+    /// plan; it is the plan being corrected. What cannot be corrected is paperwork already filed,
+    /// which is why <see cref="OutgoingShipment.InvoicingFiledAt"/> is the gate and the run's
+    /// state is not.
+    ///
+    /// <see cref="OutgoingShipmentState.Delivered"/> still freezes: the run is over, there is
+    /// nothing left to correct, and it is also where the ledger settles what the next order
+    /// promised to carry.
     ///
     /// <see cref="OutgoingShipmentState.Cancelled"/> is deliberately excluded: cancelling a
     /// run frees its orders back to <see cref="OrderState.New"/> for reuse, but the stop link
@@ -25,13 +32,32 @@ public static class OrderMutability
     /// </remarks>
     public static bool IsContentEditable(Order order)
     {
-        if (order.State is OrderState.Finished or OrderState.Cancelled)
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+        return IsContentEditable(order.State, shipment?.State, shipment?.IsInvoicingFiled ?? false);
+    }
+
+    /// <summary>
+    /// The same rule from the three facts it turns on, for callers that hold a projection rather
+    /// than an entity — the order detail's own DTO, so the screen never carries a second copy of
+    /// this.
+    /// </summary>
+    public static bool IsContentEditable(
+        OrderState orderState,
+        OutgoingShipmentState? shipmentState,
+        bool invoicingFiled)
+    {
+        if (orderState is OrderState.Finished or OrderState.Cancelled)
             return false;
 
-        var shipmentState = order.OutgoingShipmentStop?.OutgoingShipment?.State;
+        if (shipmentState is null)
+            return true;
 
-        return shipmentState is not (OutgoingShipmentState.Loaded
-            or OutgoingShipmentState.InTransit
-            or OutgoingShipmentState.Delivered);
+        // Cancellation outranks filing, for the reason above: the orders of a cancelled run are
+        // freed for reuse, and paperwork filed on a run that then did not happen must not hold
+        // them.
+        if (shipmentState is OutgoingShipmentState.Cancelled)
+            return true;
+
+        return shipmentState != OutgoingShipmentState.Delivered && !invoicingFiled;
     }
 }

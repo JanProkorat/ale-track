@@ -7,10 +7,12 @@ import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
   ExportOutgoingShipmentDto,
+  ShipmentExportScope,
   SetOrderItemSourcingDto,
   SetSupplierGoodSourcingDto,
   ReorderShipmentStopsDto,
   SetPreparationStepDto,
+  SetStopCompletionDto,
   SetShipmentStateDto,
   SetStockPurchaseDto,
   type CreateOutgoingShipmentDto,
@@ -163,6 +165,67 @@ export function useSetPreparationStep(shipmentId: string | undefined) {
 
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+export interface SetStopCompletionArgs {
+  /** Public id of the stop, as the vykládka row carries it. */
+  stopId: string;
+  isCompleted: boolean;
+}
+
+/**
+ * Marks one stop of a run as finished — unloaded and left behind.
+ *
+ * Nobody tracks the van: the drivers ring in as they go, and this is the office writing that
+ * down. The API takes it only while the run is in transit, in both directions.
+ *
+ * Optimistic for the same reason the checklist is: the answer is a value the clicker already
+ * knows, and the round trip would otherwise be a visibly dead row. The stamped time is the
+ * server's, so the patched one is a placeholder the refetch corrects — near enough that nobody
+ * sees the difference, and never stored.
+ */
+export function useSetStopCompletion(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ stopId, isCompleted }: SetStopCompletionArgs) =>
+      ds.setStopCompletionEndpoint(shipmentId!, stopId, new SetStopCompletionDto({ isCompleted })),
+
+    onMutate: async ({ stopId, isCompleted }: SetStopCompletionArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype, as the checklist patch above is and for the same reason.
+      const next = Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+      );
+      next.stops = (previous.stops ?? []).map((stop) => {
+        if (stop.id !== stopId) return stop;
+        const patched = Object.assign(Object.create(Object.getPrototypeOf(stop)), stop);
+        // Re-marking keeps the first time, as the endpoint does.
+        patched.completedAt = isCompleted ? stop.completedAt ?? new Date() : undefined;
+        return patched;
+      });
+      qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
       if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
     },
   });
@@ -468,6 +531,19 @@ export function useSetStockPurchase(shipmentId: string | undefined) {
 export type ShipmentExportFormat = 'excel' | 'word';
 
 /**
+ * How much of a run an export carries: the plan as it was ordered, only what diverged from it, or
+ * both. A string union rather than the generated numeric enum, like `ShipmentExportFormat` — the UI
+ * picks by name and the mapping to the wire lives here, in one place.
+ */
+export type ShipmentExportScopeName = 'plan' | 'changed' | 'all';
+
+const EXPORT_SCOPES: Record<ShipmentExportScopeName, ShipmentExportScope> = {
+  plan: ShipmentExportScope.Plan,
+  changed: ShipmentExportScope.Changed,
+  all: ShipmentExportScope.All,
+};
+
+/**
  * Downloads the shipment as a spreadsheet or a document — an overview of the run, then one sheet
  * (Excel) or one page (Word) per client listing what that client ordered.
  *
@@ -486,12 +562,14 @@ export function useExportShipment() {
   const ds = useDataSource();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, format, clientIds }: {
+    mutationFn: ({ id, format, clientIds, scope = 'plan' }: {
       id: string;
       format: ShipmentExportFormat;
       clientIds: string[];
+      /** Defaults to the plan, which is what an export meant before there was a choice. */
+      scope?: ShipmentExportScopeName;
     }) => {
-      const data = new ExportOutgoingShipmentDto({ clientIds });
+      const data = new ExportOutgoingShipmentDto({ clientIds, scope: EXPORT_SCOPES[scope] });
       return format === 'word'
         ? ds.exportOutgoingShipmentWordEndpoint(id, data)
         : ds.exportOutgoingShipmentExcelEndpoint(id, data);

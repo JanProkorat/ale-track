@@ -6,7 +6,7 @@ import {
   Backdrop,
   Box, Button, Card, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link,
-  Stack, TextField, Typography,
+  Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -27,6 +27,8 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ArrowUpIcon from '@mui/icons-material/KeyboardArrowUpOutlined';
 import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
@@ -34,9 +36,12 @@ import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
+import { fmtDate, num, fmtLiters, orderNumber, plural, shipmentNumber } from 'src/lib/format';
 import {
+  SHIP_STATUS, shipStateName, kindLabel, lineTravels, startPointKindName, stopKindName,
+} from 'src/lib/labels';
+import {
+  type ClientLedgerEntryDto,
   type OutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   type OutgoingShipmentSupplierGoodDto,
@@ -50,8 +55,10 @@ import {
 import {
   useSetPreparationStep, useExportShipment, useShipmentStartPoints,
   useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
+  useSetStopCompletion,
   useReorderShipmentStops,
   type ShipmentExportFormat,
+  type ShipmentExportScopeName,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
 import { useInventory } from 'src/hooks/useInventory';
@@ -67,6 +74,13 @@ import { PurchaseInvoiceChips, PurchaseInvoiceTotalsLines } from './PurchaseInvo
 import { NakladkaSource, NakladkaTable } from './NakladkaTable';
 import { type StepperAdjust } from './nakladkaControls';
 import { groupByBreweryThenKind } from './nakladkaGrouping';
+import { nakladkaLock } from './nakladkaLock';
+import {
+  ALL_INVOICES, UNLOAD_VIEW, defaultLoadingView,
+} from './loadingView';
+import {
+  departureBlockReason, missingForState, needsDeparturePrep,
+} from './departureReadiness';
 import { colorForClient } from './clientColor';
 import { StopAvatar } from './StopAvatar';
 import { routeEndpointFrom } from './startPointOption';
@@ -78,8 +92,18 @@ import {
 } from './supplierGoodSourcing';
 import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from './stopOverview';
 import { predictPickupStops, withSplitApplied } from './pickupStopPrediction';
-import { platoSizeChipText, unloadOrder } from './unloadOrder';
+import { platoSizeChipText, unloadChipText, unloadOrder, type UnloadStop } from './unloadOrder';
+import { useClientLedgersMany } from 'src/hooks/useClientLedger';
+import { useSuppliersMany } from 'src/hooks/useSuppliers';
+import {
+  applyLedger, entriesForOrder, entriesForTarget, planRow,
+} from 'src/features/clients/ledgerModel';
+import { LedgerRowTag, QuantityDiff } from 'src/features/clients/LedgerDiff';
+import {
+  LedgerEntryDrawer, type LedgerDrawerContext,
+} from 'src/features/clients/LedgerEntryDrawer';
 import { UnloadOrderList } from './UnloadOrderList';
+import { supplierStopHours, type StopHoursNote } from './supplierStopHours';
 import { ExportSelectionDrawer } from './ExportSelectionDrawer';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
@@ -160,15 +184,6 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     fromInventory: 0,
   };
 }
-/** Tab value for the unfiltered loading list; the rest are invoice sequences. */
-const ALL_INVOICES = 'all';
-
-/** Tab value for the driver's stop-by-stop unload view; every other option
- * filters the loading list instead. A plain string, not a sequence — the
- * invoice tabs' values are `String(sequence)`, always numeric, so there is no
- * real collision risk, but this reads clearly in the SegControl regardless. */
-const UNLOAD_VIEW = 'unload';
-
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
 }
@@ -765,8 +780,28 @@ export function SupplierGoodsCard({ rows, editable, onAdjust }: {
 /** Vratky the driver collects on this route. Returns belong to the orders, not
  * to the shipment, so this is read-only and grouped per stop — two orders for
  * one client read as two groups, which is what the driver actually walks. */
-export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
-  const groups = stops.filter((st) => (st.returns ?? []).length > 0);
+export function ReturnsCard({ stops, ledgerByClient }: {
+  stops: OutgoingShipmentStopDto[];
+  /**
+   * The run's clients' ledgers. Without them the card reads exactly as it did; with them, a stop
+   * whose only returns are a deviation appears at all — before this, a client who handed the
+   * driver four crates against an order that planned none showed up nowhere on the run.
+   */
+  ledgerByClient?: Map<string, ClientLedgerEntryDto[]>;
+}) {
+  const groups = stops
+    .map((stop) => ({
+      stop,
+      rows: applyLedger(
+        (stop.returns ?? []).map((r) => planRow(r.id, r.name, r.quantity)),
+        entriesForTarget(
+          entriesForOrder(ledgerByClient?.get(stop.clientId ?? '') ?? [], stop.orderId),
+          'ReturnQuantity',
+        ),
+      ),
+    }))
+    .filter(({ rows }) => rows.length > 0);
+
   if (groups.length === 0) return null;
 
   return (
@@ -776,22 +811,30 @@ export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
         <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Vratky</Typography>
       </Stack>
       <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-        {groups.map((stop) => (
+        {groups.map(({ stop, rows }) => (
           <Box key={stop.id} sx={{ px: 2.5, py: 1.5 }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '2px', flexShrink: 0, bgcolor: colorForClient(stop.clientId ?? '') }} />
               <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{stop.clientName ?? '—'}</Typography>
             </Stack>
             <Stack spacing={1}>
-              {(stop.returns ?? []).map((r) => (
-                <Stack key={r.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 13.5 }} noWrap>{r.name}</Typography>
-                    {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
-                  </Box>
-                  <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
-                </Stack>
-              ))}
+              {rows.map((row) => {
+                const stored = (stop.returns ?? []).find((r) => r.id === row.key);
+                return (
+                  <Stack key={row.key} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={{ fontSize: 13.5, ...(row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }} noWrap>
+                          {row.name}
+                        </Typography>
+                        <LedgerRowTag row={row} />
+                      </Stack>
+                      {stored?.note && <Typography variant="caption" color="text.secondary">{stored.note}</Typography>}
+                    </Box>
+                    <Box sx={{ fontWeight: 700 }}><QuantityDiff row={row} unit="×" /></Box>
+                  </Stack>
+                );
+              })}
             </Stack>
           </Box>
         ))}
@@ -808,6 +851,7 @@ export function ShipmentDetail({
   editable,
   canSeeInvoicing = false,
   canSeeLoadingBreakdown = false,
+  canRecordLedger = false,
   onBack,
   backLabel = 'Zpět na vývozy',
   onEdit,
@@ -823,6 +867,9 @@ export function ShipmentDetail({
    *  view as the card's only content. Defaults closed for the same reason as
    *  canSeeInvoicing above. */
   canSeeLoadingBreakdown?: boolean;
+  /** Whether the user may record a deviation. The ledger rides on Clients : Edit, not Shipments —
+   *  a driver phones the dispatcher, who writes it down. Defaults closed like the two above. */
+  canRecordLedger?: boolean;
   onBack: () => void;
   /** Overridden when the vývoz was opened from another screen and Back returns
    *  there — see `DetailBackState`. */
@@ -842,6 +889,7 @@ export function ShipmentDetail({
   const setLoadingState = useSetLoadingState(shipment.id);
   const setPreparationStep = useSetPreparationStep(shipment.id);
   const setShipmentState = useSetShipmentState(shipment.id);
+  const setStopCompletion = useSetStopCompletion(shipment.id);
   const setOrderItemSourcing = useSetOrderItemSourcing(shipment.id);
   const setSupplierGoodSourcing = useSetSupplierGoodSourcing(shipment.id);
   const reorderShipmentStops = useReorderShipmentStops(shipment.id);
@@ -856,11 +904,14 @@ export function ShipmentDetail({
 
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // The emergency unlock, held for this visit only: a packed run's nakládka reads as
+  // finished, and re-opening it is a decision the office makes each time it walks up to
+  // the screen rather than one that sticks to the run.
+  const [nakladkaUnlocked, setNakladkaUnlocked] = useState(false);
   const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
   const [stockPurchaseProductId, setStockPurchaseProductId] = useState<string | null>(null);
   const [stockPurchaseQty, setStockPurchaseQty] = useState('1');
 
-  const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
   // The sequence a reorder is asking for, held until the write settles.
   //
@@ -948,11 +999,38 @@ export function ShipmentDetail({
   const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
   // Custom extras belong to the orders on the route; the nakládka only lists them.
-  const customExtras = useMemo(
-    () => stopsSorted.flatMap((st) => (st.customExtraItems ?? []).map((extra) => ({
-      clientName: st.clientName ?? '—', extra,
-    }))),
+  // Every client the run calls on, so one query per client rather than one per stop — two stops
+  // of the same client share a ledger.
+  const ledgerClientIds = useMemo(
+    () => [...new Set(stopsSorted.map((st) => st.clientId).filter((id): id is string => !!id))],
     [stopsSorted],
+  );
+  // 'all', not 'open': what came off the van is a permanent fact about that handover, so settling
+  // it afterwards must not put the plan back on this screen.
+  const { byClient: ledgerByClient } = useClientLedgersMany(ledgerClientIds, 'all');
+
+  // Diffed, and including the rows that exist only as a deviation: an extra handed over at the
+  // door against an order that listed none showed up nowhere on the run before this.
+  const customExtras = useMemo(
+    () => stopsSorted.flatMap((st) => {
+      const rows = applyLedger(
+        (st.customExtraItems ?? []).map((e) => planRow(e.id, e.description, e.quantity)),
+        entriesForTarget(
+          entriesForOrder(ledgerByClient.get(st.clientId ?? '') ?? [], st.orderId),
+          'CustomExtraQuantity',
+        ),
+      );
+
+      return rows.map((row) => ({
+        clientName: st.clientName ?? '—',
+        row,
+        note: (st.customExtraItems ?? []).find((e) => e.id === row.key)?.note,
+      }));
+    }),
+    // ledgerByClient is a fresh Map per render, so the deps key on the stops; a ledger arriving
+    // re-renders this component anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stopsSorted, ledgerClientIds.join(',')],
   );
 
   // Warned about rather than blocked: a booked delivery may still land in time. Only while
@@ -962,8 +1040,15 @@ export function ShipmentDetail({
     () => overdrawnStock(stopsSorted, shipStateName(shipment.state)),
     [stopsSorted, shipment.state],
   );
+  // A bill-only line is left out: nothing of it is loaded or carried, so it belongs on neither
+  // the nakládka nor the weight. Its money is on the Fakturace, which reads the invoice lines.
   const combinedRows = useMemo(
-    () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
+    () => [
+      ...stopsSorted.flatMap((st) => (st.products ?? [])
+        .filter((p) => lineTravels(p.lineKind))
+        .map(productRowFrom)),
+      ...extraRows,
+    ],
     [stopsSorted, extraRows],
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
@@ -991,8 +1076,17 @@ export function ShipmentDetail({
   // Filter the loading list down to one brewery invoice: what to read out when the
   // pallet is being checked against that invoice rather than against the whole run.
   // One tab per column, so a third invoice gets a tab too.
-  const [invoiceFilter, setInvoiceFilter] = useState<string>(ALL_INVOICES);
-  useEffect(() => { setInvoiceFilter(ALL_INVOICES); }, [shipment.id]);
+  //
+  // Which view it opens on is the run's state's business (loadingView.ts): once the van is out,
+  // the loading list is history and the unload order is what is being worked through. Re-applied
+  // when the state changes, so a run that departs while the screen is open switches over — and
+  // only then, so a deliberate switch back to Nakládka survives every refetch after it.
+  const [invoiceFilter, setInvoiceFilter] = useState<string>(
+    () => defaultLoadingView(shipStateName(shipment.state)),
+  );
+  useEffect(() => {
+    setInvoiceFilter(defaultLoadingView(shipStateName(shipment.state)));
+  }, [shipment.id, shipment.state]);
 
   const invoiceColumns = useMemo(() => columnsOf(purchaseInvoices), [purchaseInvoices]);
   const filterOptions = useMemo<SegOption<string>[]>(() => [
@@ -1010,13 +1104,54 @@ export function ShipmentDetail({
     ? UNLOAD_VIEW
     : filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
 
+  // Opening hours for the run's pickup stops, held against the run's own date and time. Read off
+  // the suppliers themselves rather than the stops, which carry the supplier's address but not its
+  // schedule; useSuppliersMany shares its cache with the Dodavatelé screens, so a run whose
+  // suppliers have been looked at costs nothing.
+  const pickupSupplierIds = useMemo(
+    () => [...new Set(
+      stopsSorted
+        .filter((stop) => stopKindName(stop.kind) === 'Supplier' && stop.supplierId)
+        .map((stop) => stop.supplierId!),
+    )],
+    [stopsSorted],
+  );
+  const { bySupplier } = useSuppliersMany(pickupSupplierIds);
+  const supplierHours = useMemo(() => {
+    const map = new Map<string, StopHoursNote>();
+    for (const id of pickupSupplierIds) {
+      const note = supplierStopHours(bySupplier.get(id)?.openingHours, shipment.deliveryDate);
+      if (note) map.set(id, note);
+    }
+    return map;
+    // bySupplier is a fresh Map per render (see the hook's own note), so the deps key on the ids
+    // and the date; a supplier arriving re-renders this component anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupSupplierIds, shipment.deliveryDate, bySupplier.size]);
+
   // The driver's stop-by-stop unload order, for the Vykládka tab. Kept in
   // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
   // without a rendering harness — this screen only shapes it into rows.
   const unloadStops = useMemo(
-    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? [], shipment.supplierGoods ?? []),
-    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods],
+    () => unloadOrder(
+      stopsSorted,
+      shipment.stockPurchases ?? [],
+      shipment.supplierGoods ?? [],
+      ledgerByClient,
+    ),
+    // ledgerByClient is a fresh Map per render (see the hook's own note), so the deps key on the
+    // stops and the goods; a ledger arriving re-renders this component anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods, ledgerClientIds.join(',')],
   );
+
+  // Recording is offered per stop, once that stop's Fakturace row is marked finished — see
+  // UnloadOrderList. Nothing about the run's own state decides it: at Naloženo the papers need
+  // not be done, and gating on state let the office record here while the order screen was still
+  // offering to edit the plan underneath.
+  const canRecordDeviation = canRecordLedger;
+
+  const [recordingStop, setRecordingStop] = useState<UnloadStop | null>(null);
 
   const visibleRows = useMemo(
     () => (activeFilter === ALL_INVOICES
@@ -1044,11 +1179,25 @@ export function ShipmentDetail({
   const assignedDrivers = shipment.drivers ?? [];
 
   const stateName = shipStateName(shipment.state);
-  // "Do garáže" is content, not loading progress: goods bought and put on the truck, which
-  // freeze when the truck is packed. Narrower than nakladkaEditable, which stays true through
-  // Loaded and InTransit for the steppers and tick boxes that really are progress. The API has
-  // always drawn the line here (ShipmentContentGuard counts stock purchases as frozen content);
-  // the buttons were offered past it regardless and could only produce a 400.
+
+  // Two gates, because the nakládka table freezes a state earlier than everything around it. A
+  // packed truck's loading list is a plan that has already been acted on, so it reads as finished
+  // and takes edits only once the office unlocks it by hand; Delivered and Cancelled shut it for
+  // good. nakladkaEditable keeps its older, wider meaning for the cards outside the table — the
+  // checklist, the supplier goods and Fakturace are all worked through after loading, and none of
+  // them may be caught by the table's lock.
+  const tableLock = nakladkaLock(stateName);
+  const nakladkaEditable = editable && tableLock !== 'closed';
+  const nakladkaTableEditable = nakladkaEditable && (tableLock === 'open' || nakladkaUnlocked);
+  /** The lock's chrome appears only where unlocking is on offer. */
+  const showTableLock = editable && tableLock === 'locked';
+
+  // "Do garáže" is content, not loading progress: goods bought and put on the truck, which freeze
+  // when the truck is packed. Narrower still than the unlocked table, which can put pieces back on
+  // a brewery invoice — buying more goods onto a packed run is not a correction of the loading
+  // list, it is a different run. The API has always drawn the line here (ShipmentContentGuard
+  // counts stock purchases as frozen content); the buttons were offered past it regardless and
+  // could only produce a 400.
   const stockPurchaseEditable = editable && stateName === 'Created';
   const status = SHIP_STATUS[stateName ?? 'Created'] ?? SHIP_STATUS.Created;
 
@@ -1070,6 +1219,15 @@ export function ShipmentDetail({
     Loaded: S.Created,
     InTransit: S.Loaded,
   } as Record<string, OutgoingShipmentState>)[stateName ?? ''];
+  // The API refuses a step the run is not ready for (EnsureReady): a vehicle to be loaded, the
+  // full plan to leave or to be delivered. Offering the button anyway meant the office learned
+  // about a forgotten van from an error toast, so the same rule is read here and the button says
+  // what is missing.
+  const missingToDepart = forwardStep && needsDeparturePrep(forwardStep.to)
+    ? missingForState(shipment, forwardStep.to)
+    : [];
+  const departureBlocked = missingToDepart.length > 0;
+
   const ghostBtnSx = { color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } } as const;
 
   // Every write this screen makes now has its own narrow endpoint — the state, the sourcing
@@ -1077,6 +1235,17 @@ export function ShipmentDetail({
   // full-object PUT it used to funnel all of them through belongs to the editor, which really
   // does rewrite the whole run; sending it from here meant a whole-shipment diff and rebuild
   // per click.
+
+  // What the drivers ring in with: this stop is done, we are on our way to the next. Only while
+  // the run is on the road — the endpoint refuses it otherwise — and only for someone who may
+  // edit the run; a finished stop still shows its time to everyone else.
+  const canFinishStops = editable && stateName === 'InTransit';
+  const handleStopFinished = (stop: UnloadStop, isCompleted: boolean) => {
+    if (!stop.stopId) return;
+    setStopCompletion.mutate({ stopId: stop.stopId, isCompleted }, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+    });
+  };
 
   // A transition sends the state and nothing else.
   function advance(next: OutgoingShipmentState) {
@@ -1092,10 +1261,14 @@ export function ShipmentDetail({
   // that name off Content-Disposition, so nothing here has to reconstruct it. The fallback only
   // covers a proxy that strips the header, and carries the right extension per format so the file
   // still opens in the right program.
-  function runExport(format: ShipmentExportFormat, clientIds: string[]) {
+  function runExport(
+    format: ShipmentExportFormat,
+    clientIds: string[],
+    scope: ShipmentExportScopeName,
+  ) {
     if (!shipment.id) return;
 
-    exportShipment.mutate({ id: shipment.id, format, clientIds }, {
+    exportShipment.mutate({ id: shipment.id, format, clientIds, scope }, {
       onSuccess: (file) => {
         setExportOpen(false);
         downloadBlob(file.data, file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'));
@@ -1317,18 +1490,28 @@ export function ShipmentDetail({
                 same endpoint, and a second click during the first would race the first one's
                 own state change. The clicked button carries the spinner so it is obvious which
                 one is working. */}
-            {editable && forwardStep && (
-              <Button
-                variant={forwardStep.primary ? 'contained' : 'outlined'}
-                startIcon={stateChange === forwardStep.to
-                  ? <CircularProgress size={16} color="inherit" />
-                  : forwardStep.icon}
-                onClick={() => advance(forwardStep.to)}
-                disabled={stateChange !== null}
-              >
-                {forwardStep.label}
-              </Button>
-            )}
+            {editable && forwardStep && (() => {
+              const button = (
+                <Button
+                  variant={forwardStep.primary ? 'contained' : 'outlined'}
+                  startIcon={stateChange === forwardStep.to
+                    ? <CircularProgress size={16} color="inherit" />
+                    : forwardStep.icon}
+                  onClick={() => advance(forwardStep.to)}
+                  disabled={stateChange !== null || departureBlocked}
+                >
+                  {forwardStep.label}
+                </Button>
+              );
+
+              // A disabled button takes no pointer events, so the reason needs a wrapper to hang
+              // the hover on. Only wrapped while it is actually blocked.
+              return departureBlocked ? (
+                <Tooltip title={departureBlockReason(forwardStep.to, missingToDepart)}>
+                  <span>{button}</span>
+                </Tooltip>
+              ) : button;
+            })()}
             {editable && revertTo !== undefined && (
               <Button
                 variant="outlined"
@@ -1383,6 +1566,9 @@ export function ShipmentDetail({
           viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
           height={360}
           navigable
+          // When the van leaves, beside how far it goes and how long that takes.
+          startAt={shipment.deliveryDate}
+          // When the van leaves, beside how far it goes and how long that takes.
           // Veiled while a write the screen has predicted is still being confirmed. Both pending
           // values are cleared once the refetch has landed, so this covers exactly the window in
           // which the drawn route is catching up — including the road route, which re-resolves
@@ -1437,7 +1623,45 @@ export function ShipmentDetail({
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Rozpis zboží</Typography>
+              {/* Why the steppers and tick boxes are gone, and the way back to them. Amber once
+                  unlocked, so an open table on a packed run never looks like a normal one. */}
+              {showTableLock && (
+                <>
+                  <Box sx={{ flex: 1 }} />
+                  <StatusPill
+                    tone={nakladkaUnlocked ? 'amber' : 'grey'}
+                    label={nakladkaUnlocked ? 'Odemčeno' : 'Uzamčeno'}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={nakladkaUnlocked
+                      ? <LockOutlinedIcon fontSize="small" />
+                      : <LockOpenOutlinedIcon fontSize="small" />}
+                    onClick={() => setNakladkaUnlocked((was) => !was)}
+                    sx={ghostBtnSx}
+                  >
+                    {nakladkaUnlocked ? 'Zamknout' : 'Odemknout'}
+                  </Button>
+                </>
+              )}
             </Stack>
+            {showTableLock && nakladkaUnlocked && (
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{
+                  px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider',
+                  bgcolor: (t) => t.vars!.palette.brand.amberTint,
+                }}
+              >
+                <WarningAmberOutlinedIcon fontSize="small" sx={{ color: 'warning.main', flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+                  Vývoz je naložený. Úpravy nakládky provádějte jen v nutném případě.
+                </Typography>
+              </Stack>
+            )}
             {/* The gutters are the toolbar's, not the table's. The nakládka's tiers are
                 keyed on its container's width and the design's widths are the card's —
                 20px of padding each side would take an iPad's 521px card down to 479 and
@@ -1455,7 +1679,7 @@ export function ShipmentDetail({
                 <Box sx={{ flex: 1 }} />
                 {/* Beside the views rather than up in the card's head, because both act on the
                     nakládka alone — hidden under Vykládka, where neither has anything to add. */}
-                {nakladkaEditable && activeFilter !== UNLOAD_VIEW && (
+                {nakladkaTableEditable && activeFilter !== UNLOAD_VIEW && (
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                     {stockPurchaseEditable && (
                       <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
@@ -1476,7 +1700,19 @@ export function ShipmentDetail({
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
                 <Box sx={{ px: { xs: 1.25, compact: 2.5 } }}>
-                  <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
+                  <UnloadOrderList
+                    stops={unloadStops}
+                    startPoint={startPointLabel}
+                    supplierHours={supplierHours}
+                    onToggleFinished={canFinishStops ? handleStopFinished : undefined}
+                    onOpenOrder={onOpenOrder}
+                    // Recording opens when the run's invoicing is filed — before that the
+                    // office is still correcting the orders themselves, and a deviation
+                    // recorded against a plan that can still move would not stay true.
+                    onRecordChange={canRecordDeviation && (shipment.isInvoicingFiled ?? false)
+                      ? setRecordingStop
+                      : undefined}
+                  />
                 </Box>
               ) : (
                 <NakladkaTable
@@ -1491,7 +1727,7 @@ export function ShipmentDetail({
                       totals={purchaseTotals}
                       progress={columnProgress}
                       invoices={purchaseInvoices}
-                      editable={nakladkaEditable}
+                      editable={nakladkaTableEditable}
                       onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
                         onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
                       })}
@@ -1501,8 +1737,8 @@ export function ShipmentDetail({
                     <NakladkaSource
                       entries={breakdownSlots(
                         agg,
-                        agg.orderQuantity > 0 && nakladkaEditable,
-                        stockPurchaseEditable && nakladkaEditable,
+                        agg.orderQuantity > 0 && nakladkaTableEditable,
+                        stockPurchaseEditable && nakladkaTableEditable,
                         (delta) => adjustSourcing(agg, delta),
                         (delta) => adjustStockPurchase(agg, delta),
                       )}
@@ -1513,7 +1749,7 @@ export function ShipmentDetail({
                       row={agg}
                       invoices={purchaseInvoices}
                       states={loadingStates}
-                      editable={nakladkaEditable}
+                      editable={nakladkaTableEditable}
                       onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
                       onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
                     />
@@ -1554,14 +1790,19 @@ export function ShipmentDetail({
               </Stack>
               <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
                 {/* Owned by the order — added there, only displayed here. */}
-                {customExtras.map(({ clientName, extra }) => (
-                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                {customExtras.map(({ clientName, row, note }) => (
+                  <Stack key={`${clientName}-${row.key}`} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography noWrap>{extra.description}</Typography>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : undefined} noWrap>
+                          {row.name}
+                        </Typography>
+                        <LedgerRowTag row={row} />
+                      </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{clientName}</Typography>
-                      {extra.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{extra.note}</Typography>}
+                      {note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{note}</Typography>}
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{extra.quantity} ks</Typography>
+                    <Box sx={{ fontWeight: 700 }}><QuantityDiff row={row} /></Box>
                   </Stack>
                 ))}
               </Stack>
@@ -1667,7 +1908,7 @@ export function ShipmentDetail({
             }))}
           />
 
-          <ReturnsCard stops={stopsSorted} />
+          <ReturnsCard stops={stopsSorted} ledgerByClient={ledgerByClient} />
 
           <PreparationStepsCard
             steps={shipment.preparationSteps ?? []}
@@ -1686,7 +1927,12 @@ export function ShipmentDetail({
           it when hidden, so no orphan margin is left behind. */}
       {canSeeInvoicing && (
         <Box sx={{ mt: 2.5 }}>
-          <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
+          <ShipmentInvoicing
+            shipmentId={shipment.id!}
+            editable={nakladkaEditable}
+            stops={stopsSorted}
+            onOpenOrder={onOpenOrder}
+          />
         </Box>
       )}
 
@@ -1751,9 +1997,56 @@ export function ShipmentDetail({
         onClose={() => setConfirmCancel(false)}
       />
 
+      {/* One drawer for whichever stop is being recorded. Its "actual" column is prefilled from
+          the stored deviation, so reopening it never records the same difference twice. */}
+      {recordingStop && (
+        <LedgerEntryDrawer
+          open
+          context={ledgerDrawerContext(recordingStop, stopsSorted, ledgerByClient)}
+          onClose={() => setRecordingStop(null)}
+        />
+      )}
+
       <StateChangeOverlay state={stateChange} />
     </Box>
   );
+}
+
+/**
+ * What the recording drawer needs about one stop: the client, the order, and the plan each
+ * collection is measured against.
+ *
+ * The plan is the order's own quantity, which is also what was loaded — a shipment's content
+ * freezes when the truck is packed, so the two cannot diverge. (The prototype shows an
+ * "objednáno 4, naloženo 6" case; the real model has no way to load more than the order says.)
+ */
+function ledgerDrawerContext(
+  stop: UnloadStop,
+  stops: OutgoingShipmentStopDto[],
+  ledgerByClient: Map<string, ClientLedgerEntryDto[]>,
+): LedgerDrawerContext {
+  const source = stops.find((st) => st.orderId === stop.orderId);
+  const clientId = stop.clientIdForLedger ?? '';
+  const entries = entriesForOrder(ledgerByClient.get(clientId) ?? [], stop.orderId);
+
+  return {
+    clientId,
+    clientName: stop.title,
+    orderId: stop.orderId,
+    orderLabel: stop.orderId ? orderNumber(stop.orderId) : undefined,
+    items: (source?.products ?? []).map((p) => planRow(
+      p.orderItemId,
+      p.name,
+      p.quantity,
+      unloadChipText(p),
+    )),
+    itemProductIds: (source?.products ?? [])
+      .map((p) => p.id)
+      .filter((id): id is string => Boolean(id)),
+    returns: (source?.returns ?? []).map((r) => planRow(r.id, r.name, r.quantity)),
+    extras: (source?.customExtraItems ?? []).map((e) => planRow(e.id, e.description, e.quantity)),
+    entries,
+  };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Box, Card, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -7,6 +8,8 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { DataTable, type Column } from 'src/components/common/DataTable';
+import { SegControl } from 'src/components/common/SegControl';
+import { SearchField } from 'src/components/common/SearchField';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { StatusPill } from 'src/components/common/StatusPill';
@@ -21,6 +24,16 @@ import { backOrReplace } from 'src/routes/editorNav';
 import { detailBackState, type DetailBackState } from 'src/routes/backNav';
 import { ShipmentDetail } from './ShipmentDetail';
 import { ShipmentEditor } from './ShipmentEditor';
+
+/**
+ * The list's state segments, in the order a run passes through them.
+ *
+ * Labelled from `SHIP_STATUS` rather than a second vocabulary: a segment reading one word and
+ * the pill in the row beneath it another would be two names for one state. A cancelled run is
+ * soft-deleted but not filtered out of this list, so it earns a segment like the rest.
+ */
+const SEGMENT_STATES = ['Created', 'Loaded', 'InTransit', 'Delivered', 'Cancelled'] as const;
+type StateFilter = 'all' | (typeof SEGMENT_STATES)[number];
 
 /** Vývozy (Outgoing Shipments) — the app's most complex screen: route
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
@@ -38,6 +51,32 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
 
   const list = useShipments();
   const detail = useShipment(view ? undefined : id);
+
+  const shipments = useMemo(() => list.data ?? [], [list.data]);
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
+  const [search, setSearch] = useState('');
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: shipments.length };
+    for (const state of SEGMENT_STATES) {
+      c[state] = shipments.filter((s) => shipStateName(s.state) === state).length;
+    }
+    return c;
+  }, [shipments]);
+
+  // Filtered here rather than through the endpoint's parameters: the whole list is already
+  // loaded, and a round trip per keystroke would be slower than the filter it replaces.
+  // Order is preserved, so the newest-created-first the endpoint returns still holds.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    // The number as well as the name: it is the column people read first, and a run named
+    // "Rozvoz Žitava" is easier to find by the number printed on its paperwork.
+    const matches = (s: OutgoingShipmentListItemDto) => !q
+      || (s.name ?? '').toLowerCase().includes(q)
+      || shipmentNumber(s.id).toLowerCase().includes(q);
+    return shipments.filter((s) =>
+      (stateFilter === 'all' || shipStateName(s.state) === stateFilter) && matches(s));
+  }, [shipments, stateFilter, search]);
   // A linked driver seeing no shipments is normal (their last run finished); only an
   // unlinked account is actually broken. useDrivers() tells the two apart the same way
   // DriversPage does — its own row shows up (or does not) for a driver-scoped caller.
@@ -148,6 +187,9 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               // the screen stays renderable without an auth provider.
               canSeeInvoicing={can('Invoicing')}
               canSeeLoadingBreakdown={can('LoadingBreakdown')}
+              // The ledger is a client record, so recording a deviation needs Clients : Edit —
+              // a driver phones the dispatcher, who writes it down.
+              canRecordLedger={canEdit('clients')}
               onBack={() => navigate(backTarget?.backTo ?? PATHS.shipments)}
               backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
@@ -196,28 +238,75 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               />
             }
           >
-            {(rows) => (
+            {() => (
               <>
-                <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.25 }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
-                    {rows.length} vývozů
+                <Stack
+                  direction={{ xs: 'column', compact: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ xs: 'stretch', compact: 'center' }}
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mb: 2 }}
+                >
+                  <SegControl
+                    value={stateFilter}
+                    onChange={setStateFilter}
+                    options={[
+                      { value: 'all' as StateFilter, label: 'Vše' },
+                      ...SEGMENT_STATES.map((state) => ({
+                        value: state as StateFilter,
+                        label: SHIP_STATUS[state].label,
+                      })),
+                    ].map(({ value, label }) => ({
+                      value,
+                      label: (
+                        <Box component="span">
+                          {label}
+                          {counts[value] ? <Box component="span" sx={{ ml: 0.5, opacity: 0.55 }}>{counts[value]}</Box> : null}
+                        </Box>
+                      ),
+                    }))}
+                  />
+                  <SearchField
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Hledat vývoz…"
+                    width={{ xs: '100%', compact: 240 }}
+                  />
+                  <Box sx={{ flex: 1, display: { xs: 'none', compact: 'block' } }} />
+                  {/* Redundant on a phone — the active "Vše 460" segment already says it. */}
+                  <Typography
+                    sx={{
+                      display: { xs: 'none', compact: 'block' },
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: 'text.disabled',
+                    }}
+                  >
+                    {filtered.length} z {shipments.length}
                   </Typography>
                 </Stack>
-                <Card variant="outlined">
-                  {/* No defaultSort: the endpoint already returns the list newest-created
-                      first (createdDate has no column of its own), and DataTable keeps
-                      that order until a header is clicked. The delivery date is a
-                      planning field that moves, so it never decided the list's order. */}
-                  <DataTable
-                    columns={columns}
-                    rows={rows}
-                    getRowKey={(s) => s.id ?? ''}
-                    onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)}
-                    mobileCard={shipmentCard}
-                    paginated
-                    pageSizeKey="shipments"
-                  />
-                </Card>
+
+                {filtered.length === 0 ? (
+                  <EmptyState icon={<LocalShippingOutlinedIcon />} title="Žádné vývozy v tomto filtru" dense />
+                ) : (
+                  <Card variant="outlined">
+                    {/* No defaultSort: the endpoint already returns the list newest-created
+                        first (createdDate has no column of its own), and DataTable keeps
+                        that order until a header is clicked. The delivery date is a
+                        planning field that moves, so it never decided the list's order. */}
+                    <DataTable
+                      columns={columns}
+                      rows={filtered}
+                      getRowKey={(s) => s.id ?? ''}
+                      onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)}
+                      mobileCard={shipmentCard}
+                      paginated
+                      pageSizeKey="shipments"
+                      pageResetKey={`${stateFilter}|${search}`}
+                    />
+                  </Card>
+                )}
               </>
             )}
           </QueryBoundary>

@@ -42,7 +42,14 @@ export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateOrderDto) => ds.createOrderEndpoint(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.orders.all }),
+    onSuccess: (_res, data) => {
+      qc.invalidateQueries({ queryKey: qk.orders.all });
+      // The save also assigns the client's open points to this order (settledLedgerEntryIds), so
+      // the ledger it was read from is now behind. Without this, reopening the editor inside the
+      // 30s staleTime read the pre-save ledger: the promises looked never made, and saving again
+      // released them — the posted set is authoritative.
+      if (data.clientId) qc.invalidateQueries({ queryKey: qk.clientLedgers(data.clientId) });
+    },
   });
 }
 
@@ -52,9 +59,12 @@ export function useUpdateOrder() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateOrderDto }) =>
       ds.updateOrderEndpoint(id, data),
-    onSuccess: (_res, { id }) => {
+    onSuccess: (_res, { id, data }) => {
       qc.invalidateQueries({ queryKey: qk.orders.all });
       qc.invalidateQueries({ queryKey: qk.orders.detail(id) });
+      // Same as the create: the write assigns and releases the client's open points, so their
+      // ledger has moved under every screen holding it.
+      if (data.clientId) qc.invalidateQueries({ queryKey: qk.clientLedgers(data.clientId) });
       // The write can also propagate the address onto (and stamp) the
       // order's shipment stop server-side. With staleTime 30s and no
       // refetch-on-focus, an editor → shipment-detail navigation inside that
@@ -73,7 +83,14 @@ export function useDeleteOrder() {
     // action actually cancels the order (state -> Cancelled) rather than
     // removing its history — the demo slice mirrors that.
     mutationFn: (id: string) => ds.deleteOrderEndpoint(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.orders.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.orders.all });
+      // Cancelling releases every point the order promised. The id is all this mutation has, so
+      // the ledgers are matched on the key's shape rather than on a client.
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === 'clients' && q.queryKey[2] === 'ledger',
+      });
+    },
   });
 }
 

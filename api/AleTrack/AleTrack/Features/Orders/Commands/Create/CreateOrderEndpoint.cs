@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -79,6 +80,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 Product = relatedProduct!,
                 Quantity = orderItem.Quantity,
                 ReminderState = orderItem.ReminderState,
+                LineKind = orderItem.LineKind,
                 Note = orderItem.Note
             });
         }
@@ -116,6 +118,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 SupplierGood = relatedGood!,
                 Quantity = item.Quantity,
                 Note = item.Note,
+                LineKind = item.LineKind,
                 // The good's standing default; a shipment can move pieces either way later.
                 QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(relatedGood!, item.Quantity)
             });
@@ -125,6 +128,10 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             dbContext, order, client!, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
 
         client!.Orders.Add(order);
+
+        // The open points this order promises to settle. The order has no key yet, so the link is
+        // made through the navigation and EF fills the column in the same save.
+        await ClientLedgerAssignment.AssignAsync(dbContext, order, req.Data.SettledLedgerEntryIds, ct);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(order.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);

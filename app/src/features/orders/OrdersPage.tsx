@@ -248,6 +248,10 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
             <OrderDetail
               order={order}
               editable={editable}
+              // The ledger is a client record, so recording a deviation needs Clients : Edit —
+              // resolved here like `editable`, so the detail stays renderable without an auth
+              // provider.
+              canRecordDeviation={canEdit('clients')}
               onBack={() => navigate(backTarget?.backTo ?? PATHS.orders)}
               backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.orders}/${id}/edit`)}
@@ -256,6 +260,15 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
               // the way back — the mirror of how a vývoz opens its orders.
               onOpenShipment={canSee('shipments')
                 ? (shipmentId) => navigate(`${PATHS.shipments}/${shipmentId}`, {
+                  state: {
+                    backTo: `${PATHS.orders}/${id}`,
+                    backLabel: 'Zpět na objednávku',
+                  } satisfies DetailBackState,
+                })
+                : undefined}
+              // Same detour, same way back: the client's arrow returns to this order.
+              onOpenClient={canSee('clients')
+                ? (clientId) => navigate(`${PATHS.clients}/${clientId}`, {
                   state: {
                     backTo: `${PATHS.orders}/${id}`,
                     backLabel: 'Zpět na objednávku',

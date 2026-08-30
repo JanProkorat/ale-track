@@ -31,7 +31,7 @@ const stops = [
   { lat: 50.77, lng: 15.05, label: 'Hospoda C' },
 ];
 
-function renderMap(overlay?: ReactNode, opts: { busy?: boolean } = {}) {
+function renderMap(overlay?: ReactNode, opts: { busy?: boolean; startAt?: Date } = {}) {
   return render(
     <RouteMap
       stops={stops}
@@ -41,6 +41,7 @@ function renderMap(overlay?: ReactNode, opts: { busy?: boolean } = {}) {
       overlayShowLabel="Zobrazit zastávky"
       overlayHideLabel="Skrýt zastávky"
       busy={opts.busy}
+      startAt={opts.startAt}
     />,
   );
 }
@@ -171,5 +172,37 @@ describe('RouteMap — the veil while the route is catching up', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zobrazit zastávky' }));
 
     expect(screen.getByText('Přehled zastávek')).toBeInTheDocument();
+  });
+});
+
+// When the run sets off, beside how far it goes and how long that takes — the three numbers the
+// dispatcher reads together. Only when the run has a date: the map is also drawn while one is
+// still being planned.
+describe('RouteMap — the run\'s departure', () => {
+  it('reads out the date and time the run leaves', () => {
+    renderMap(undefined, { startAt: new Date(2026, 7, 26, 7, 30) });
+
+    expect(screen.getByText('ODJEZD')).toBeInTheDocument();
+    // fmtTime zero-pads, as it does everywhere else a Date's time is shown.
+    expect(screen.getByText('26. 8. 07:30')).toBeInTheDocument();
+  });
+
+  it('leaves the stat out when the run has no date', () => {
+    renderMap();
+
+    expect(screen.queryByText('ODJEZD')).not.toBeInTheDocument();
+  });
+
+  // The chevron moved into the last stat's own box, so this pins that it still opens the panel
+  // from there.
+  it('still unfolds the panel from beside the stop count', () => {
+    renderMap(<div>Přehled zastávek</div>, { startAt: new Date(2026, 7, 26, 7, 30) });
+
+    const toggle = screen.getByRole('button', { name: 'Zobrazit zastávky' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByRole('button', { name: 'Skrýt zastávky' })).toHaveAttribute('aria-expanded', 'true');
   });
 });

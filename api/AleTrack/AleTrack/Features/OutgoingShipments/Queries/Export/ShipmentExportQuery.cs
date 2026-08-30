@@ -69,6 +69,9 @@ public static class ShipmentExportQuery
                         Order = s.Order,
                         Kind = s.Kind,
                         ClientId = s.ClientOrder != null ? s.ClientOrder.ClientId : null,
+                        // Internal ID of the order, which is how its recorded deviations are found:
+                        // a ledger entry keys on the order, not on the stop.
+                        OrderId = s.ClientOrder != null ? s.ClientOrder.Id : null,
                         ClientName = s.ClientOrder != null ? s.ClientOrder.Client.Name : null,
                         Label = s.Label,
                         SelectedAddressKind = s.SelectedAddressKind,
@@ -94,8 +97,13 @@ public static class ShipmentExportQuery
                         // these sheets carry no brewery column, so grouping by a supplier the reader
                         // cannot see would look arbitrary. Reading by degree is what the customer
                         // asked for. Spelled out because EF cannot translate a method call here.
+                        // A bill-only line is left out: nothing of it travels, so it belongs on
+                        // neither the loading sheet nor the stop's own. Its billed row still
+                        // appears in the invoice part, with nothing in the "skutečně" column —
+                        // which is the truth about it.
                         Products = s.ClientOrder != null
                             ? s.ClientOrder.OrderItems
+                                .Where(oi => oi.LineKind != OrderLineKind.BillOnly)
                                 .OrderBy(oi => oi.Product.Type == ProductType.Lemonade
                                             || oi.Product.Type == ProductType.Merchandise
                                             || oi.Product.Type == ProductType.Other ? 1 : 0)
@@ -133,14 +141,15 @@ public static class ShipmentExportQuery
                         Returns = s.ClientOrder != null
                             ? s.ClientOrder.Returns
                                 .OrderBy(r => r.Name)
-                                .Select(r => new ShipmentExportReturn
+                                .Select(r => new RawReturn
                                 {
+                                    Id = r.Id,
                                     Name = r.Name,
                                     Note = r.Note,
                                     Quantity = r.Quantity
                                 })
                                 .ToList()
-                            : new List<ShipmentExportReturn>()
+                            : new List<RawReturn>()
                     })
                     .ToList(),
                 // Product order per ProductOrdering; one brewery's goods per stock purchase row, so
@@ -171,6 +180,14 @@ public static class ShipmentExportQuery
 
         var invoicedSplit = await LoadInvoicedItemsAsync(dbContext, shipmentId, clientIds, ct);
 
+        // What diverged from the plan, read beside the orders rather than out of them. Only the
+        // Changed and All scopes render any of it; the model carries it either way, and the scope
+        // filter decides — see ShipmentExportScopeFilter.
+        var deviations = ClientDeviations.From(
+            await LoadDeviationsAsync(dbContext, shipment.Stops, ct),
+            invoicedSplit,
+            shipment.Stops);
+
         // Where each client's goods went, for the parties of the invoice part. The per-stop sheets
         // that used to carry the address, the order's notes and its vratky are gone, so the party
         // whose goods they are carries them instead. A client with two stops on one run takes the
@@ -188,7 +205,7 @@ public static class ShipmentExportQuery
         var deliveryByClient = shipment.Stops
             .Where(s => s.ClientId is not null)
             .GroupBy(s => s.ClientId!.Value)
-            .ToDictionary(g => g.Key, g => ToDelivery(g.OrderBy(s => s.Order).First()));
+            .ToDictionary(g => g.Key, g => ToDelivery(g.OrderBy(s => s.Order).First(), deviations));
 
         return new ShipmentExportModel
         {
@@ -200,7 +217,7 @@ public static class ShipmentExportQuery
                 .Select(stop => ToStop(stop, company, shipment.StockPurchases))
                 .ToList(),
             StockPurchases = shipment.StockPurchases,
-            Invoices = BuildInvoices(invoicedSplit, deliveryByClient, deliveredByClientItem)
+            Invoices = BuildInvoices(invoicedSplit, deliveryByClient, deliveredByClientItem, deviations)
         };
     }
 
@@ -233,7 +250,7 @@ public static class ShipmentExportQuery
         ShipmentInvoiceReconciler.Reconcile(split);
 
         var shipment = split.Shipment;
-        var orderers = OrderersBySource(shipment);
+        var orderers = OrderersBySource(split);
         var lines = shipment.Invoices.SelectMany(invoice => invoice.Lines.Select(line =>
         {
             var sourceItemId = ShipmentInvoiceGraph.SourceItemIdOf(line);
@@ -332,10 +349,12 @@ public static class ShipmentExportQuery
     /// item's own order, exactly as the Fakturace screen derives it.
     /// </remarks>
     private static Dictionary<(InvoiceLineSourceKind SourceKind, long SourceItemId), (long ClientId, string Name)>
-        OrderersBySource(OutgoingShipment shipment)
+        OrderersBySource(ShipmentInvoiceSplit split)
     {
         var orderers =
             new Dictionary<(InvoiceLineSourceKind SourceKind, long SourceItemId), (long ClientId, string Name)>();
+
+        var shipment = split.Shipment;
 
         foreach (var order in shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!))
         {
@@ -349,6 +368,13 @@ public static class ShipmentExportQuery
 
             foreach (var good in order.SupplierGoodItems)
                 orderers[(InvoiceLineSourceKind.SupplierGoodItem, good.Id)] = orderer;
+
+            // Nothing to attribute for now — the ledger stays out of invoicing, so the split
+            // carries no entries. Kept because a ledger-sourced line has no order item to key on:
+            // its pieces would fall back to the invoice's own client and land in the wrong block
+            // whenever a payer differs from the orderer.
+            foreach (var entry in split.LedgerEntries.Where(e => e.OrderId == order.Id))
+                orderers[(InvoiceLineSourceKind.LedgerEntry, entry.Id)] = orderer;
         }
 
         return orderers;
@@ -385,13 +411,23 @@ public static class ShipmentExportQuery
     private static List<ShipmentExportInvoice> BuildInvoices(
         InvoicedSplit split,
         Dictionary<long, PartyDelivery> deliveryByClient,
-        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
-        split.ByInvoiceAndOrderer
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem,
+        ClientDeviations deviations)
+    {
+        var blocks = split.ByInvoiceAndOrderer
             .GroupBy(entry => entry.Key.InvoiceId)
             .Select(invoiceGroup => (InvoiceId: invoiceGroup.Key, Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
             .Where(x => split.ReadyNumberByPayer.ContainsKey(x.Invoice.PayerId))
             .OrderBy(x => split.ReadyNumberByPayer[x.Invoice.PayerId])
             .ThenBy(x => x.Invoice.Sequence)
+            .ToList();
+
+        // Deviations belong to the client, not to an invoice. A client holding two invoices on the
+        // run appears as a party in both, so they are written into the first of them only: printing a
+        // debt twice is how a file starts overstating what somebody owes.
+        var placed = new HashSet<long>();
+
+        return blocks
             .Select(x => BuildExportInvoice(
                 split,
                 x.InvoiceId,
@@ -399,8 +435,11 @@ public static class ShipmentExportQuery
                 x.Invoice,
                 x.Lines,
                 deliveryByClient,
-                deliveredByClientItem))
+                deliveredByClientItem,
+                deviations,
+                placed))
             .ToList();
+    }
 
     private static ShipmentExportInvoice BuildExportInvoice(
         InvoicedSplit split,
@@ -409,7 +448,9 @@ public static class ShipmentExportQuery
         (long PayerId, Guid PayerPublicId, int Sequence, string Name, string? BusinessName) invoice,
         IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines,
         Dictionary<long, PartyDelivery> deliveryByClient,
-        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem,
+        ClientDeviations deviations,
+        HashSet<long> placed) =>
         new()
         {
             Number = number,
@@ -428,7 +469,9 @@ public static class ShipmentExportQuery
                     invoice.PayerId,
                     ordererGroup,
                     deliveryByClient.GetValueOrDefault(ordererGroup.Key),
-                    deliveredByClientItem))
+                    deliveredByClientItem,
+                    deviations,
+                    placed.Add(ordererGroup.Key)))
                 .ToList()
         };
 
@@ -445,7 +488,9 @@ public static class ShipmentExportQuery
         long payerId,
         IGrouping<long, KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> ordererGroup,
         PartyDelivery? delivery,
-        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem,
+        ClientDeviations deviations,
+        bool carriesAllDeviations) =>
         new()
         {
             ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
@@ -462,10 +507,12 @@ public static class ShipmentExportQuery
                     Kind = entry.Value.Kind,
                     PackageSize = entry.Value.PackageSize,
                     Quantity = entry.Value.Quantity,
-                    DeliveredQuantity = DeliveredFor(deliveredByClientItem, ordererGroup.Key, entry.Key)
+                    DeliveredQuantity = DeliveredFor(deliveredByClientItem, ordererGroup.Key, entry.Key),
+                    Deviation = deviations.ForLine(ordererGroup.Key, entry.Key.SourceKind, entry.Key.SourceItemId)
                 })
                 .OrderBy(p => p.Name, StringComparer.CurrentCulture)
-                .ToList()
+                .ToList(),
+            Deviations = carriesAllDeviations ? deviations.For(ordererGroup.Key) : []
         };
 
     /// <summary>
@@ -489,7 +536,7 @@ public static class ShipmentExportQuery
     /// <summary>
     /// Where one client's goods went on this run, as its invoice parties report it.
     /// </summary>
-    private static PartyDelivery ToDelivery(RawStop stop)
+    private static PartyDelivery ToDelivery(RawStop stop, ClientDeviations deviations)
     {
         var (street, cityLine, _) = ResolveAddress(stop);
 
@@ -505,6 +552,14 @@ public static class ShipmentExportQuery
                 : null,
             Notes = stop.Notes,
             Returns = stop.Returns
+                .Select(r => new ShipmentExportReturn
+                {
+                    Name = r.Name,
+                    Note = r.Note,
+                    Quantity = r.Quantity,
+                    Deviation = deviations.ForReturn(stop.ClientId, r.Id)
+                })
+                .ToList()
         };
     }
 
@@ -674,10 +729,27 @@ public static class ShipmentExportQuery
         public AddressDto? ContactAddress { get; init; }
         public string? DeliveryPlaceName { get; init; }
         public AddressDto? DeliveryPlaceAddress { get; init; }
+        /// <summary>
+        /// Internal ID of the order delivered here — the key its deviations are read by. Null for a
+        /// stop with no order.
+        /// </summary>
+        public long? OrderId { get; init; }
+
         public List<string> Notes { get; init; } = [];
         public List<RawProduct> Products { get; init; } = [];
         public List<RawProduct> CustomExtras { get; init; } = [];
-        public List<ShipmentExportReturn> Returns { get; init; } = [];
+        public List<RawReturn> Returns { get; init; } = [];
+    }
+
+    /// <summary>
+    /// One returnable line of an order, carrying the ID a deviation against it keys on.
+    /// </summary>
+    private sealed record RawReturn
+    {
+        public required long Id { get; init; }
+        public required string Name { get; init; }
+        public string? Note { get; init; }
+        public required int Quantity { get; init; }
     }
 
     /// <summary>
@@ -775,5 +847,204 @@ public static class ShipmentExportQuery
             ReadyNumberByPayer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = [],
             RecipientsByInvoice = []
         };
+    }
+
+    /// <summary>
+    /// Reads the deviations recorded against the orders on this run, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the order rather than on the stop, and filtered by the IDs the projection already
+    /// carries rather than by walking the navigation back to the shipment: a plain foreign-key
+    /// filter is one predicate the database can index, and it does not depend on which navigations
+    /// a caller happened to load.
+    ///
+    /// A standalone debt — a ledger entry with no order behind it — is deliberately out. It is a
+    /// fact about the client, not about this run, and the run's paperwork is not where it is settled.
+    /// </remarks>
+    private static async Task<List<RawDeviation>> LoadDeviationsAsync(
+        AleTrackDbContext dbContext,
+        List<RawStop> stops,
+        CancellationToken ct)
+    {
+        var orderIds = stops
+            .Where(stop => stop.OrderId is not null)
+            .Select(stop => stop.OrderId!.Value)
+            .ToList();
+
+        if (orderIds.Count == 0)
+            return [];
+
+        return await dbContext.ClientLedgerEntries
+            .Where(e => e.OrderId != null && orderIds.Contains(e.OrderId.Value))
+            .OrderBy(e => e.CreatedAt)
+            .Select(e => new RawDeviation
+            {
+                ClientId = e.ClientId,
+                Target = e.Target,
+                OrderItemId = e.OrderItemId,
+                SupplierGoodItemId = e.SupplierGoodItemId,
+                CustomExtraItemId = e.CustomExtraItemId,
+                OrderReturnId = e.OrderReturnId,
+                ProductName = e.ProductName,
+                ProductKind = e.Product != null ? e.Product.Kind : null,
+                PackageSize = e.Product != null ? e.Product.PackageSize : null,
+                Weight = e.Product != null ? e.Product.Weight : null,
+                LineName = e.LineName,
+                PlannedQuantity = e.PlannedQuantity,
+                ActualQuantity = e.ActualQuantity,
+                PlannedText = e.PlannedText,
+                ActualText = e.ActualText,
+                Amount = e.Amount,
+                Note = e.Note,
+                RequiresFollowUp = e.RequiresFollowUp
+            })
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// One deviation as it was recorded, before it is matched to the row it belongs on.
+    /// </summary>
+    private sealed record RawDeviation
+    {
+        public required long ClientId { get; init; }
+        public required ClientLedgerEntryTarget Target { get; init; }
+        public long? OrderItemId { get; init; }
+        public long? SupplierGoodItemId { get; init; }
+        public long? CustomExtraItemId { get; init; }
+        public long? OrderReturnId { get; init; }
+
+        /// <summary>Product name as the entry snapshotted it, so a retired product still reads.</summary>
+        public string? ProductName { get; init; }
+
+        public ProductKind? ProductKind { get; init; }
+        public double? PackageSize { get; init; }
+        public double? Weight { get; init; }
+        public string? LineName { get; init; }
+        public int? PlannedQuantity { get; init; }
+        public int? ActualQuantity { get; init; }
+        public string? PlannedText { get; init; }
+        public string? ActualText { get; init; }
+        public decimal? Amount { get; init; }
+        public string? Note { get; init; }
+        public bool RequiresFollowUp { get; init; }
+    }
+
+    /// <summary>
+    /// The run's deviations per client, plus which rows of the file they touched.
+    /// </summary>
+    /// <remarks>
+    /// Two jobs, and they are separate on purpose. <see cref="For"/> is what the file renders — every
+    /// deviation of that client, in the order it was recorded, whether or not the file has a row for
+    /// it. <see cref="ForLine"/> and <see cref="ForReturn"/> only mark the rows a deviation touched,
+    /// which is how the Changed scope knows which rows to keep.
+    ///
+    /// Marking cannot be the same thing as rendering, because the two do not line up: a deviation is
+    /// recorded against an order line, the file is written from the invoice split, and a line can be
+    /// billed on no invoice or have been taken off the order since. Rendering off the marks would
+    /// silently drop exactly those — and a deviation the office recorded that the file does not
+    /// mention is the failure that costs money.
+    /// </remarks>
+    private sealed record ClientDeviations
+    {
+        public static ClientDeviations Empty => new();
+
+        private Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), ShipmentExportDeviation> ByLine { get; init; } = [];
+
+        private Dictionary<(long ClientId, long ReturnId), ShipmentExportDeviation> ByReturn { get; init; } = [];
+
+        private Dictionary<long, List<ShipmentExportDeviation>> ByClient { get; init; } = [];
+
+        /// <summary>
+        /// Sorts raw deviations against what the file actually has rows for.
+        /// </summary>
+        public static ClientDeviations From(
+            List<RawDeviation> raws,
+            InvoicedSplit split,
+            List<RawStop> stops)
+        {
+            if (raws.Count == 0)
+                return Empty;
+
+            var billed = split.ByInvoiceAndOrderer.Keys
+                .Select(key => (key.OrdererId, key.SourceKind, key.SourceItemId))
+                .ToHashSet();
+
+            var returns = stops
+                .Where(stop => stop.ClientId is not null)
+                .SelectMany(stop => stop.Returns.Select(r => (ClientId: stop.ClientId!.Value, r.Id)))
+                .ToHashSet();
+
+            var sorted = new ClientDeviations();
+
+            foreach (var raw in raws)
+            {
+                var deviation = ToDeviation(raw);
+
+                sorted.ByClient.TryAdd(raw.ClientId, []);
+                sorted.ByClient[raw.ClientId].Add(deviation);
+
+                var line = LineKeyOf(raw);
+
+                if (line is not null && billed.Contains((raw.ClientId, line.Value.SourceKind, line.Value.SourceItemId)))
+                {
+                    sorted.ByLine[(raw.ClientId, line.Value.SourceKind, line.Value.SourceItemId)] = deviation;
+                    continue;
+                }
+
+                if (raw.Target == ClientLedgerEntryTarget.ReturnQuantity
+                    && raw.OrderReturnId is not null
+                    && returns.Contains((raw.ClientId, raw.OrderReturnId.Value)))
+                {
+                    sorted.ByReturn[(raw.ClientId, raw.OrderReturnId.Value)] = deviation;
+                }
+
+                // Anything else touches no row of this file — goods taken at the door, money owed, a
+                // redirected delivery, a line billed on no invoice. It is rendered all the same.
+            }
+
+            return sorted;
+        }
+
+        /// <summary>The deviation on one billed row, or null while it went to plan.</summary>
+        public ShipmentExportDeviation? ForLine(long clientId, InvoiceLineSourceKind kind, long sourceItemId) =>
+            ByLine.GetValueOrDefault((clientId, kind, sourceItemId));
+
+        /// <summary>The deviation on one vratka, or null while it went to plan.</summary>
+        public ShipmentExportDeviation? ForReturn(long? clientId, long returnId) =>
+            clientId is null ? null : ByReturn.GetValueOrDefault((clientId.Value, returnId));
+
+        /// <summary>Every deviation recorded against one client on this run, oldest first.</summary>
+        public List<ShipmentExportDeviation> For(long clientId) =>
+            ByClient.GetValueOrDefault(clientId, []);
+
+        /// <summary>
+        /// Which billed row a deviation is about, or null when it is about no row at all.
+        /// </summary>
+        private static (InvoiceLineSourceKind SourceKind, long SourceItemId)? LineKeyOf(RawDeviation raw) =>
+            raw switch
+            {
+                { Target: ClientLedgerEntryTarget.ProductQuantity, OrderItemId: { } id } =>
+                    (InvoiceLineSourceKind.OrderItem, id),
+                { Target: ClientLedgerEntryTarget.CustomExtraQuantity, CustomExtraItemId: { } id } =>
+                    (InvoiceLineSourceKind.CustomExtraItem, id),
+                { Target: ClientLedgerEntryTarget.SupplierGoodQuantity, SupplierGoodItemId: { } id } =>
+                    (InvoiceLineSourceKind.SupplierGoodItem, id),
+                _ => null
+            };
+
+        private static ShipmentExportDeviation ToDeviation(RawDeviation raw) =>
+            new()
+            {
+                Target = raw.Target,
+                LineName = raw.LineName ?? raw.ProductName,
+                PlannedQuantity = raw.PlannedQuantity,
+                ActualQuantity = raw.ActualQuantity,
+                PlannedText = raw.PlannedText,
+                ActualText = raw.ActualText,
+                Amount = raw.Amount,
+                Note = raw.Note,
+                RequiresFollowUp = raw.RequiresFollowUp
+            };
     }
 }

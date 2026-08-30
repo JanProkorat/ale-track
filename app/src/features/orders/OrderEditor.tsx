@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Button, Card, Chip, CircularProgress, IconButton, Stack,
+  Box, Button, Card, Chip, CircularProgress, IconButton, ListItemText, Menu, MenuItem, Stack,
   TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -9,43 +9,44 @@ import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import HistoryIcon from '@mui/icons-material/HistoryOutlined';
 import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
-import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
-import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
-import { PriceWithList } from 'src/components/common/PriceWithList';
 import { clientComboOptions } from 'src/features/clients/clientOptions';
-import { groupByBrewery, groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
+import {
+  KIND_TABS, breweryPanels, countsByKind, groupByBrewery, inDisplayOrder, matchesQuery,
+  type KindTab,
+} from './orderCatalogModel';
+import { BreweryGroupPanel, CatalogGroupList } from './ProductCatalog';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
-import { initials, plural, fmtLiters, orderNumber } from 'src/lib/format';
-import { kindLabel, kindName, addrKindValue, chargeKindLabel } from 'src/lib/labels';
+import { initials, fmtLiters, orderNumber, plural } from 'src/lib/format';
+import { kindLabel, addrKindValue, lineKindLabel, lineKindName } from 'src/lib/labels';
 import {
   DeliveryAddressKind,
   CreateOrderDto,
   CreateOrderItemDto,
   UpdateOrderDto,
   UpdateOrderItemDto,
+  type UpdateOrderResultDto,
   OrderReturnDto,
   OrderNoteDto,
   OrderCustomExtraItemDto,
   OrderSupplierGoodItemDto,
   type ProductListItemDto,
-  type BreweryGroupDto,
-  type KindGroupDto,
   type OrderItemReminderState,
-  type SupplierGoodDto,
+  OrderLineKind,
 } from 'src/generated/api-client';
 import { useClients, useClient } from 'src/hooks/useClients';
 import { useClientDeliveryPlaces } from 'src/hooks/useDeliveryPlaces';
@@ -54,16 +55,47 @@ import { useBreweries } from 'src/hooks/useBreweries';
 import { useProducts } from 'src/hooks/useProducts';
 import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
 import { groupSupplierGoods, primaryPrice, resolvedGoodMap } from './supplierGoodCatalogModel';
+import { SupplierGoodPanel } from './SupplierGoodCatalog';
+import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
+import { useClientLedger } from 'src/hooks/useClientLedger';
+import { type ClientLedgerEntryDto } from 'src/generated/api-client';
+import { ClientOpenItemsPreview } from 'src/features/clients/ClientOpenItemsPreview';
+import { LedgerTag } from 'src/features/clients/LedgerDiff';
+import {
+  billablePieces,
+  extraLineName,
+  isBillable,
+  isExtraSettleable,
+  ledgerNoteText,
+  ledgerTodo,
+  isGoodSettleable,
+  isReturnSettleable,
+  isSettleable,
+  owedPieces,
+  lineNameKey,
+  returnLineName,
+} from 'src/features/clients/ledgerModel';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
 
-// Member names, not the numeric members: the real API serializes enums as strings
-// (JsonStringEnumConverter) while demo data sends numbers, so everything here buckets
-// and compares through kindName — the same convention as VolumeTab and productSort.
-const KIND_TABS = ['Keg', 'Bottle', 'Can', 'Multipack', 'Other'] as const;
-type KindTab = (typeof KIND_TABS)[number];
+/**
+ * How a cart row is addressed: the product AND what the line is for.
+ *
+ * One product can sit on an order twice — once as goods to deliver, once as pieces the client
+ * already took and only owes money for. Keying rows by the product alone merged the two, and the
+ * merged row was loaded: billing pieces is not the same instruction as carrying them. The server
+ * matches on the same pair.
+ */
+function cartKey(line: { productId: string; lineKind?: OrderLineKind }): string {
+  return `${line.productId}|${lineKindName(line.lineKind)}`;
+}
+
+/** Whether a row is an ordinary one — the only kind the catalog's own +/− touches. */
+function isNormalLine(line: { lineKind?: OrderLineKind }): boolean {
+  return lineKindName(line.lineKind) === 'Normal';
+}
 
 interface CartLine {
   productId: string;
@@ -71,10 +103,32 @@ interface CartLine {
   reminderState?: OrderItemReminderState;
   /** Instruction for whoever loads or delivers this line. */
   note?: string;
+  /**
+   * Whether the line is for the goods, the money, or both. Undefined means an ordinary line —
+   * the same as {@link OrderLineKind.Normal}, and what every line added from the catalog is.
+   */
+  lineKind?: OrderLineKind;
 }
 
 /** A vratka row being edited. `id` is present only for rows already persisted. */
 interface DraftReturn { id?: string; name: string; quantity: number; note: string }
+
+/**
+ * What adding an open point to this draft actually did, so undoing it can put the draft back.
+ *
+ * A row is not always opened: an add tops up a row that was already there for its own sake, and
+ * dropping such a row on undo would delete something nobody asked to delete. So the quantity
+ * before the add is recorded, and null means "there was no row".
+ */
+interface LedgerAdd {
+  entryId: string;
+  target: 'cart' | 'goods' | 'extras' | 'returns' | 'notes';
+  /** Product id, good id, the vratka's folded name, or the note's text — whatever addresses it. */
+  key: string;
+  /** Which of the two lines of one product was touched. Irrelevant for a vratka. */
+  lineKind: OrderLineKind;
+  previousQuantity: number | null;
+}
 
 /** An order note being edited. `id` is present only for notes already persisted. */
 interface DraftNote { id?: string; text: string }
@@ -87,7 +141,13 @@ interface DraftExtra { id?: string; description: string; quantity: number; note:
  * price list. `id` is present only for lines already persisted; keeping it is what
  * lets the backend patch the row in place instead of replacing it.
  */
-interface DraftGoodLine { id?: string; supplierGoodId: string; quantity: number; note?: string }
+interface DraftGoodLine {
+  id?: string;
+  supplierGoodId: string;
+  quantity: number;
+  note?: string;
+  lineKind?: OrderLineKind;
+}
 
 /** What a loaded order already told us about a good, for rendering a line before (or
  *  without) the supplier's live price list. */
@@ -107,16 +167,48 @@ function serializeForm(
   return JSON.stringify({
     clientId,
     date: date ? date.toISOString() : null,
-    cart: cart.map((c) => ({ ...c, note: c.note?.trim() ?? '' })),
+    // The kind is normalised to its name: undefined and Normal mean the same thing, and comparing
+    // the raw values would call a form dirty for picking "Normální" on a line that already was.
+    cart: cart.map((c) => ({ ...c, note: c.note?.trim() ?? '', lineKind: lineKindName(c.lineKind) })),
     returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity, note: r.note.trim() })),
     notes: notes.map((n) => n.text.trim()),
     extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity, note: e.note.trim() })),
     deliveryAddress: { kind: deliveryAddress.kind, placeId: deliveryAddress.placeId ?? null },
-    goodLines: goodLines.map((g) => ({ supplierGoodId: g.supplierGoodId, quantity: g.quantity, note: g.note?.trim() ?? '' })),
+    goodLines: goodLines.map((g) => ({
+      supplierGoodId: g.supplierGoodId,
+      quantity: g.quantity,
+      note: g.note?.trim() ?? '',
+      lineKind: lineKindName(g.lineKind),
+    })),
   });
 }
-function flattenKind(k: KindGroupDto): ProductListItemDto[] {
-  return (k.packageSizes ?? []).flatMap((pkg) => pkg.items ?? []);
+/**
+ * What to tell the operator their save undid on the run, or nothing.
+ *
+ * Both marks mean somebody checked something: a Fakturace row closed, a line counted into the van.
+ * Saying so is the whole point — the office would otherwise find a row it had finished quietly
+ * open again, with no idea why.
+ */
+function shipmentWorkUndone(result: UpdateOrderResultDto): string | undefined {
+  const parts: string[] = [];
+
+  if (result.invoicingUnmarked) parts.push('fakturace už není označená jako hotová');
+
+  // The run-wide reset says the stronger thing, so it stands in for the per-line ticks it comes
+  // with: telling somebody a product must be loaded again and, separately, that two of its lines
+  // lost a tick is one fact told twice.
+  const reset = result.loadingProductsReset ?? 0;
+  const cleared = result.loadingChecksCleared ?? 0;
+
+  if (reset > 0) {
+    parts.push(`nakládka se u ${reset} ${plural(reset, 'produktu', 'produktů', 'produktů')} vrátila na nenaloženo`);
+  } else if (cleared > 0) {
+    parts.push(`u ${cleared} ${plural(cleared, 'položky', 'položek', 'položek')} padla kontrola nakládky`);
+  }
+
+  if (parts.length === 0) return undefined;
+
+  return `Ve vývozu se kvůli změně počtů ${parts.join(' a ')} — zkontrolujte to.`;
 }
 
 function clientInitials(name?: string): string {
@@ -124,310 +216,6 @@ function clientInitials(name?: string): string {
   return initials(a, b);
 }
 
-/** Says out loud what the struck-through ceník price beside it only implies —
- *  ports the prototype's `specialPriceTag`. */
-function ClientPriceChip() {
-  return (
-    <Chip
-      size="small"
-      icon={<WalletIcon sx={{ fontSize: '13px !important' }} />}
-      label="vlastní cena"
-      sx={{
-        height: 20,
-        fontSize: 11,
-        fontWeight: 700,
-        color: (t) => t.vars!.palette.brand.amberStrong,
-        '& .MuiChip-icon': { color: 'inherit' },
-      }}
-    />
-  );
-}
-
-function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; onChange: (delta: number) => void }) {
-  if (qty <= 0) {
-    return (
-      <Button
-        size="small"
-        variant="outlined"
-        startIcon={<AddIcon fontSize="small" />}
-        onClick={onAdd}
-        sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700, bgcolor: 'background.paper' }}
-      >
-        Přidat
-      </Button>
-    );
-  }
-  return (
-    <Stack direction="row" spacing={0.5} alignItems="center" flexShrink={0}>
-      <IconButton size="small" onClick={() => onChange(-1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Ubrat">
-        <RemoveIcon fontSize="small" />
-      </IconButton>
-      <Typography sx={{ minWidth: 22, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{qty}</Typography>
-      <IconButton size="small" onClick={() => onChange(1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Přidat">
-        <AddIcon fontSize="small" />
-      </IconButton>
-    </Stack>
-  );
-}
-
-function ProductRow({
-  product, qty, historyBadge, color, onAdd, onChange,
-}: {
-  product: ProductListItemDto;
-  qty: number;
-  historyBadge: boolean;
-  color?: string;
-  onAdd: () => void;
-  onChange: (delta: number) => void;
-}) {
-  return (
-    <Box sx={{
-      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderRadius: 2,
-      borderColor: qty > 0 ? 'warning.main' : 'divider',
-      bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent'),
-    }}
-    >
-      <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{product.name}</Typography>
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-          <Chip size="small" label={kindLabel(product.kind)} sx={{ height: 20, fontSize: 11 }} />
-          {product.packageSize != null && <Chip size="small" label={fmtLiters(product.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
-          <PriceWithList price={product.priceWithVat} listPrice={product.listPriceWithVat} />
-          {product.listPriceWithVat != null && <ClientPriceChip />}
-          {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
-        </Stack>
-      </Box>
-      <QtyControl qty={qty} onAdd={onAdd} onChange={onChange} />
-    </Box>
-  );
-}
-
-function VariantCard({
-  group, historyBadge, color, cartMap, onAdd, onChange,
-}: {
-  group: NameGroup;
-  historyBadge: boolean;
-  color?: string;
-  cartMap: Map<string, CartLine>;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.5, py: 1.1, bgcolor: 'action.hover' }}>
-        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{group.name}</Typography>
-        {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
-        <Box sx={{ flex: 1 }} />
-        <Chip size="small" label={`${group.items.length} ${plural(group.items.length, 'velikost', 'velikosti', 'velikostí')}`} sx={{ height: 20, fontSize: 11 }} />
-      </Stack>
-      <Stack>
-        {group.items.map((v) => {
-          const qty = cartMap.get(v.id ?? '')?.quantity ?? 0;
-          return (
-            <Stack
-              key={v.id}
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}
-            >
-              <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
-              <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>{v.description ?? ''}</Typography>
-              {v.listPriceWithVat != null && <ClientPriceChip />}
-              <PriceWithList price={v.priceWithVat} listPrice={v.listPriceWithVat} />
-              <QtyControl qty={qty} onAdd={() => onAdd(v.id ?? '')} onChange={(d) => onChange(v.id ?? '', d)} />
-            </Stack>
-          );
-        })}
-      </Stack>
-    </Box>
-  );
-}
-
-function CatalogGroupList({
-  products, historyBadge, cartMap, colorForBrewery, onAdd, onChange,
-}: {
-  products: ProductListItemDto[];
-  historyBadge: boolean;
-  cartMap: Map<string, CartLine>;
-  colorForBrewery: (breweryId?: string) => string | undefined;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  const groups = groupByName(products);
-  return (
-    <Stack spacing={1.1}>
-      {groups.map((g) => (g.items.length > 1 ? (
-        <VariantCard
-          key={g.name}
-          group={g}
-          historyBadge={historyBadge}
-          color={colorForBrewery(g.items[0].breweryId)}
-          cartMap={cartMap}
-          onAdd={onAdd}
-          onChange={onChange}
-        />
-      ) : (
-        <ProductRow
-          key={g.items[0].id}
-          product={g.items[0]}
-          qty={cartMap.get(g.items[0].id ?? '')?.quantity ?? 0}
-          historyBadge={historyBadge}
-          color={colorForBrewery(g.items[0].breweryId)}
-          onAdd={() => onAdd(g.items[0].id ?? '')}
-          onChange={(d) => onChange(g.items[0].id ?? '', d)}
-        />
-      )))}
-    </Stack>
-  );
-}
-
-function BreweryGroupPanel({
-  brewery, products, color, open, onToggle, cartMap, onAdd, onChange,
-}: {
-  brewery: BreweryGroupDto;
-  products: ProductListItemDto[];
-  color?: string;
-  open: boolean;
-  onToggle: () => void;
-  cartMap: Map<string, CartLine>;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  return (
-    // The whole brewery — header + its products — is one bordered card, so the
-    // products clearly live *inside* the brewery rather than beside it.
-    <Box sx={{ mb: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-      <Box
-        component="button"
-        type="button"
-        onClick={onToggle}
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left',
-          bgcolor: 'action.hover', border: 0, borderBottom: open ? 1 : 0, borderColor: 'divider',
-          px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
-        }}
-      >
-        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
-        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{brewery.breweryName}</Typography>
-        <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{products.length}</Typography>
-        <Box sx={{ flex: 1 }} />
-      </Box>
-      {open && (
-        <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
-          <CatalogGroupList
-            products={products}
-            historyBadge={false}
-            cartMap={cartMap}
-            colorForBrewery={() => color}
-            onAdd={onAdd}
-            onChange={onChange}
-          />
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-/** One row of the "Další zboží" tab — a good off a supplier's price list. Priced by
- *  {@link primaryPrice}, with no client-price override: a supplier charges every
- *  client the same, so there is no ceník to strike through. */
-function SupplierGoodRow({
-  good, supplierName, qty, formatMoney, onAdd, onChange,
-}: {
-  good: SupplierGoodDto;
-  supplierName: string;
-  qty: number;
-  formatMoney: (czk: number) => string;
-  onAdd: () => void;
-  onChange: (delta: number) => void;
-}) {
-  const price = primaryPrice(good);
-  return (
-    <Box sx={{
-      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderRadius: 2,
-      borderColor: qty > 0 ? 'warning.main' : 'divider',
-      bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent'),
-    }}
-    >
-      <PropaneOutlinedIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{good.name}</Typography>
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-          {good.size && <Chip size="small" label={good.size} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
-          <Chip size="small" label={supplierName} sx={{ height: 20, fontSize: 11 }} />
-          {price?.kind != null && (
-            <Chip size="small" label={chargeKindLabel(price.kind)} sx={{ height: 20, fontSize: 11 }} />
-          )}
-          {price ? (
-            <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(price.price)}</Typography>
-          ) : (
-            <Typography variant="caption" color="text.secondary">bez ceny</Typography>
-          )}
-        </Stack>
-      </Box>
-      <QtyControl qty={qty} onAdd={onAdd} onChange={onChange} />
-    </Box>
-  );
-}
-
-/** A supplier and its goods, collapsible — the "Další zboží" counterpart of
- *  {@link BreweryGroupPanel}, and deliberately the same shape so the two browse
- *  tabs read as one control. */
-function SupplierGoodPanel({
-  supplierName, goods, open, onToggle, qtyOf, formatMoney, onAdd, onChange,
-}: {
-  supplierName: string;
-  goods: SupplierGoodDto[];
-  open: boolean;
-  onToggle: () => void;
-  qtyOf: (goodId: string) => number;
-  formatMoney: (czk: number) => string;
-  onAdd: (goodId: string) => void;
-  onChange: (goodId: string, delta: number) => void;
-}) {
-  return (
-    <Box sx={{ mb: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-      <Box
-        component="button"
-        type="button"
-        onClick={onToggle}
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left',
-          bgcolor: 'action.hover', border: 0, borderBottom: open ? 1 : 0, borderColor: 'divider',
-          px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
-        }}
-      >
-        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
-        <LocalShippingOutlinedIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{supplierName}</Typography>
-        <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{goods.length}</Typography>
-        <Box sx={{ flex: 1 }} />
-      </Box>
-      {open && (
-        <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
-          <Stack spacing={1.1}>
-            {goods.map((g) => (
-              <SupplierGoodRow
-                key={g.id}
-                good={g}
-                supplierName={supplierName}
-                qty={qtyOf(g.id ?? '')}
-                formatMoney={formatMoney}
-                onAdd={() => onAdd(g.id ?? '')}
-                onChange={(d) => onChange(g.id ?? '', d)}
-              />
-            ))}
-          </Stack>
-        </Box>
-      )}
-    </Box>
-  );
-}
 
 /** History-first order builder: pick a client, then add products from their
  * order history or the full catalog (browsed by brewery/kind), review the
@@ -501,6 +289,7 @@ export function OrderEditor({
       quantity: it.quantity ?? 1,
       reminderState: it.reminderState,
       note: it.note ?? undefined,
+      lineKind: it.lineKind,
     }));
     const loadedDeliveryAddress = {
       kind: addrKindValue(o.deliveryAddress?.kind),
@@ -520,6 +309,7 @@ export function OrderEditor({
       supplierGoodId: g.supplierGoodId ?? '',
       quantity: g.quantity ?? 1,
       note: g.note ?? undefined,
+      lineKind: g.lineKind,
     }));
     setNotes(loadedNotes);
     setExtras(loadedExtras);
@@ -539,6 +329,47 @@ export function OrderEditor({
   }, [mode, orderQuery.data]);
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
+
+  // 'open', not 'all': this is a to-do list, and it is read before the cart is built rather
+  // than at the save button — beside the existing product-history read.
+  const ledgerQuery = useClientLedger(clientId ?? undefined, 'open');
+  // Memoised: the fallback array is a fresh value every render, which would make the in-cart
+  // lookup below recompute each time.
+  const openLedger = useMemo(() => ledgerQuery.data ?? [], [ledgerQuery.data]);
+
+  /**
+   * Reads the promises this order already carries into the draft, once.
+   *
+   * The save posts `settledLedgerEntryIds` as the authoritative set — anything this order carries
+   * that is not in it gets released. So an untouched reopen-and-save was quietly dropping every
+   * promise the order had made, and the undo button had nothing to take back either.
+   */
+  useEffect(() => {
+    if (mode !== 'edit' || !orderId || seededPromisesRef.current) return;
+    if (ledgerQuery.data === undefined) return;
+
+    seededPromisesRef.current = true;
+    const carried = openLedger
+      .filter((e) => e.id != null && e.resolvedByOrderId === orderId)
+      .map((e) => e.id!);
+
+    if (carried.length > 0) setSettledEntryIds((prev) => [...new Set([...prev, ...carried])]);
+  }, [mode, orderId, ledgerQuery.data, openLedger]);
+
+  // Which open points this draft promises to settle. Held in the draft and sent on save: the
+  // server links them to the order and closes them only when it actually arrives, because
+  // promising is not delivering.
+  const [settledEntryIds, setSettledEntryIds] = useState<string[]>([]);
+  /** Undo information for the promises above. See {@link LedgerAdd}. */
+  const [ledgerAdds, setLedgerAdds] = useState<LedgerAdd[]>([]);
+  /** Whether the promises this order already carries have been read into the draft. */
+  const seededPromisesRef = useRef(false);
+  /**
+   * Which cart row's kind is being chosen. One menu for the whole cart rather than one per row:
+   * a Menu per line mounts a popover per line, and a twenty-line cart pays for twenty of them.
+   */
+  const [kindMenu, setKindMenu] = useState<{ anchor: HTMLElement; key: string; isGood: boolean } | null>(null);
+  const [confirmShortfall, setConfirmShortfall] = useState(false);
 
   // Auto-pick the catalog tab once, right after a client is (re)selected —
   // history if they have any, else browse — mirrors the prototype's
@@ -608,7 +439,12 @@ export function OrderEditor({
   const goodUnitPrice = (goodId: string): number | undefined =>
     primaryPrice(goodMap.get(goodId)?.good)?.price ?? goodFallback[goodId]?.unitPriceWithVat;
 
-  const cartMap = useMemo(() => new Map(cart.map((c) => [c.productId, c])), [cart]);
+  // What the catalog needs of the cart: how many of each product are in it. Ordinary rows only —
+  // the catalog's +/− adds goods to deliver, and a bill-only row is not that.
+  const cartQuantities = useMemo(
+    () => new Map(cart.filter(isNormalLine).map((c) => [c.productId, c.quantity])),
+    [cart],
+  );
   const goodQtyOf = (goodId: string) => goodLines.find((g) => g.supplierGoodId === goodId)?.quantity ?? 0;
   const cartTotalQty = cart.reduce((n, c) => n + c.quantity, 0) + goodLines.reduce((n, g) => n + g.quantity, 0);
   const cartTotalPrice = cart.reduce((sum, c) => sum + (productMap.get(c.productId)?.priceWithVat ?? 0) * c.quantity, 0)
@@ -653,20 +489,508 @@ export function OrderEditor({
     pendingDefaultAddressClientRef.current = null;
   }, [clientId, selectedClientDetailQuery.data, selectedClientPlacesQuery.isLoading, selectedClientPlacesQuery.data]);
 
+  /** From the catalog: always the ordinary row, never a bill-only one. */
   const addProduct = (productId: string) => {
     if (!productId) return;
     setCart((prev) => {
-      const existing = prev.find((c) => c.productId === productId);
-      if (existing) return prev.map((c) => (c.productId === productId ? { ...c, quantity: c.quantity + 1 } : c));
+      const existing = prev.find((c) => c.productId === productId && isNormalLine(c));
+      if (existing) {
+        return prev.map((c) => (c.productId === productId && isNormalLine(c)
+          ? { ...c, quantity: c.quantity + 1 }
+          : c));
+      }
       return [...prev, { productId, quantity: 1 }];
     });
   };
+
+  /** The catalog's +/-, which likewise steps the ordinary row. */
   const changeQty = (productId: string, delta: number) => {
     setCart((prev) => prev
-      .map((c) => (c.productId === productId ? { ...c, quantity: c.quantity + delta } : c))
+      .map((c) => (c.productId === productId && isNormalLine(c) ? { ...c, quantity: c.quantity + delta } : c))
       .filter((c) => c.quantity > 0));
   };
-  const removeProduct = (productId: string) => setCart((prev) => prev.filter((c) => c.productId !== productId));
+
+  /** A row's own +/-, which steps exactly the row it belongs to. */
+  const changeRowQty = (key: string, delta: number) => {
+    setCart((prev) => prev
+      .map((c) => (cartKey(c) === key ? { ...c, quantity: c.quantity + delta } : c))
+      .filter((c) => c.quantity > 0));
+  };
+
+  const removeRow = (key: string) => {
+    const row = cart.find((c) => cartKey(c) === key);
+    setCart((prev) => prev.filter((c) => cartKey(c) !== key));
+    if (row) releaseRow('cart', row.productId, row.lineKind ?? OrderLineKind.Normal);
+  };
+
+  /**
+   * Which row of the draft would settle a point — the pair {@link promise} records, derived.
+   *
+   * Derived rather than only remembered, because a promise made on an earlier save has no record
+   * in this session: the order comes back carrying it and the draft has to be able to find the
+   * row it belongs to anyway.
+   */
+  const rowFor = (entry: ClientLedgerEntryDto): Omit<LedgerAdd, 'entryId' | 'previousQuantity'> & { needed: number } | undefined => {
+    const action = ledgerTodo(entry, formatMoney).action;
+
+    if (action === 'order' && entry.productId) {
+      return { target: 'cart', key: entry.productId, lineKind: OrderLineKind.Private, needed: owedPieces(entry) };
+    }
+    if (action === 'goods' && entry.supplierGoodId) {
+      return { target: 'goods', key: entry.supplierGoodId, lineKind: OrderLineKind.Private, needed: owedPieces(entry) };
+    }
+    if (action === 'extras') {
+      return {
+        target: 'extras',
+        key: lineNameKey(extraLineName(entry)),
+        lineKind: OrderLineKind.Normal,
+        needed: owedPieces(entry),
+      };
+    }
+    if (action === 'returns') {
+      return {
+        target: 'returns',
+        key: lineNameKey(returnLineName(entry)),
+        lineKind: OrderLineKind.Normal,
+        needed: owedPieces(entry),
+      };
+    }
+    if (action === 'bill') {
+      return entry.productId
+        ? { target: 'cart', key: entry.productId, lineKind: OrderLineKind.BillOnly, needed: billablePieces(entry) }
+        : {
+          target: 'goods',
+          key: entry.supplierGoodId!,
+          lineKind: OrderLineKind.BillOnly,
+          needed: billablePieces(entry),
+        };
+    }
+    if (action === 'none') {
+      return {
+        target: 'notes',
+        key: ledgerNoteText(entry, formatMoney),
+        lineKind: OrderLineKind.Normal,
+        needed: 0,
+      };
+    }
+
+    return undefined;
+  };
+
+  /** Records the promise and how to take it back. */
+  const promise = (entry: ClientLedgerEntryDto, add: Omit<LedgerAdd, 'entryId'>) => {
+    if (!entry.id) return;
+    const entryId = entry.id;
+    setSettledEntryIds((prev) => (prev.includes(entryId) ? prev : [...prev, entryId]));
+    setLedgerAdds((prev) => (prev.some((a) => a.entryId === entryId)
+      ? prev
+      : [...prev, { entryId, ...add }]));
+  };
+
+  /**
+   * Drops the promise on every point that was settled by a row which has just been removed.
+   *
+   * The other direction of the undo button: pulling the vratka or the cart line out by hand means
+   * the order is not settling that point after all, and leaving the promise standing would close
+   * the point on delivery with nothing delivered for it.
+   */
+  const releaseRow = (target: LedgerAdd['target'], key: string, lineKind?: OrderLineKind) => {
+    const matches = (candidate: { target: LedgerAdd['target']; key: string; lineKind: OrderLineKind }) =>
+      candidate.target === target && candidate.key === key
+      && (lineKind === undefined || candidate.lineKind === lineKind);
+
+    // Both the promises made in this session and the ones the order arrived with: after a save
+    // and a reopen only the second kind exists, and removing the row it settled has to release
+    // it just the same.
+    const ids = [
+      ...ledgerAdds.filter(matches).map((a) => a.entryId),
+      ...openLedger
+        .filter((e) => e.id != null && settledEntryIds.includes(e.id))
+        .filter((e) => {
+          const row = rowFor(e);
+          return row != null && matches(row);
+        })
+        .map((e) => e.id!),
+    ];
+    if (ids.length === 0) return;
+
+    setSettledEntryIds((prev) => prev.filter((id) => !ids.includes(id)));
+    setLedgerAdds((prev) => prev.filter((a) => !ids.includes(a.entryId)));
+  };
+
+  /**
+   * Puts what is still owed on the order as a private line, and remembers the promise.
+   *
+   * Private, not ordinary: the shortfall is recorded once the run's invoicing is filed, so the
+   * client has already been billed for the pieces that never arrived. Billing them again on the
+   * next order would charge twice for one delivery — these pieces travel and go on no invoice.
+   *
+   * A line of its own, not a top-up of the ordinary one: a client who orders five and is owed one
+   * should get six on the van — five billed and one free. Raising the ordinary line to
+   * max(five, one) shipped five and billed five, so the missing piece never arrived at all.
+   */
+  const addOwedToOrder = (entry: ClientLedgerEntryDto) => {
+    const productId = entry.productId;
+    if (!productId) return;
+
+    const owed = owedPieces(entry);
+    const isTheRow = (c: CartLine) => c.productId === productId
+      && lineKindName(c.lineKind) === 'Private';
+    const previous = cart.find(isTheRow)?.quantity ?? null;
+
+    setCart((prev) => {
+      if (!prev.some(isTheRow)) {
+        return [...prev, { productId, quantity: owed, lineKind: OrderLineKind.Private }];
+      }
+      return prev.map((c) => (isTheRow(c) ? { ...c, quantity: Math.max(c.quantity, owed) } : c));
+    });
+
+    promise(entry, {
+      target: 'cart', key: productId, lineKind: OrderLineKind.Private, previousQuantity: previous,
+    });
+  };
+
+  /**
+   * Sets what a cart row is for: the goods, the money, or both.
+   *
+   * Retyping a row releases any open point that was settled by it. The promise was made about a
+   * row of a particular kind — bill-only pieces settle money, delivered pieces settle goods — so
+   * once the kind changes the row is the operator's own and the point is open again. Pressing the
+   * card's button re-promises it.
+   */
+  const setLineKind = (target: { key: string; isGood: boolean }, kind: OrderLineKind) => {
+    const previousKind = kindOf(target);
+
+    if (target.isGood) {
+      setGoodLines((prev) => prev.map((g) => (g.supplierGoodId === target.key ? { ...g, lineKind: kind } : g)));
+      if (previousKind !== kind) releaseRow('goods', target.key, previousKind);
+    } else {
+      const row = cart.find((c) => cartKey(c) === target.key);
+      setCart((prev) => prev.map((c) => (cartKey(c) === target.key ? { ...c, lineKind: kind } : c)));
+      if (row && previousKind !== kind) releaseRow('cart', row.productId, previousKind);
+    }
+
+    setKindMenu(null);
+  };
+
+  /** The kind of the row the menu is open on, so the current choice can be ticked. */
+  const kindOf = (target: { key: string; isGood: boolean } | null): OrderLineKind => {
+    if (!target) return OrderLineKind.Normal;
+    const found = target.isGood
+      ? goodLines.find((g) => g.supplierGoodId === target.key)?.lineKind
+      : cart.find((c) => cartKey(c) === target.key)?.lineKind;
+    return found ?? OrderLineKind.Normal;
+  };
+
+  /**
+   * Puts pieces the client already took, and has not paid for, on this order as a bill-only line.
+   *
+   * A line of its own rather than more of an existing one: these pieces must not be loaded, and a
+   * quantity added to the ordinary line would be. The price is the client's current one, resolved
+   * exactly as any new line's is.
+   */
+  const addToBill = (entry: ClientLedgerEntryDto) => {
+    const billable = billablePieces(entry);
+    if (billable <= 0) return;
+
+    if (entry.productId) {
+      const productId = entry.productId;
+      setCart((prev) => {
+        const existing = prev.find((c) => c.productId === productId
+          && lineKindName(c.lineKind) === 'BillOnly');
+        if (!existing) {
+          return [...prev, { productId, quantity: billable, lineKind: OrderLineKind.BillOnly }];
+        }
+        return prev.map((c) => (c.productId === productId && lineKindName(c.lineKind) === 'BillOnly'
+          ? { ...c, quantity: Math.max(c.quantity, billable) }
+          : c));
+      });
+    } else if (entry.supplierGoodId) {
+      const goodId = entry.supplierGoodId;
+      setGoodLines((prev) => {
+        const existing = prev.find((g) => g.supplierGoodId === goodId
+          && lineKindName(g.lineKind) === 'BillOnly');
+        if (!existing) {
+          return [...prev, { supplierGoodId: goodId, quantity: billable, lineKind: OrderLineKind.BillOnly }];
+        }
+        return prev.map((g) => (g.supplierGoodId === goodId && lineKindName(g.lineKind) === 'BillOnly'
+          ? { ...g, quantity: Math.max(g.quantity, billable) }
+          : g));
+      });
+    } else {
+      return;
+    }
+
+    promise(entry, entry.productId
+      ? {
+        target: 'cart',
+        key: entry.productId,
+        lineKind: OrderLineKind.BillOnly,
+        previousQuantity: cart.find((c) => c.productId === entry.productId
+          && lineKindName(c.lineKind) === 'BillOnly')?.quantity ?? null,
+      }
+      : {
+        target: 'goods',
+        key: entry.supplierGoodId!,
+        lineKind: OrderLineKind.BillOnly,
+        previousQuantity: goodLines.find((g) => g.supplierGoodId === entry.supplierGoodId
+          && lineKindName(g.lineKind) === 'BillOnly')?.quantity ?? null,
+      });
+  };
+
+  /**
+   * Puts a supplier good that is still owed on the order's own goods lines, and promises the
+   * entry. The counterpart of {@link addOwedToOrder} for the other catalog.
+   */
+  const addOwedGoodToOrder = (entry: ClientLedgerEntryDto) => {
+    const goodId = entry.supplierGoodId;
+    const owed = owedPieces(entry);
+    if (!goodId || owed <= 0) return;
+
+    // Private for the reason addOwedToOrder is: the earlier run billed these pieces.
+    const isTheRow = (g: DraftGoodLine) => g.supplierGoodId === goodId
+      && lineKindName(g.lineKind) === 'Private';
+    const previous = goodLines.find(isTheRow)?.quantity ?? null;
+
+    setGoodLines((prev) => {
+      if (!prev.some(isTheRow)) {
+        return [...prev, { supplierGoodId: goodId, quantity: owed, lineKind: OrderLineKind.Private }];
+      }
+      return prev.map((g) => (isTheRow(g) ? { ...g, quantity: Math.max(g.quantity, owed) } : g));
+    });
+
+    promise(entry, {
+      target: 'goods', key: goodId, lineKind: OrderLineKind.Private, previousQuantity: previous,
+    });
+  };
+
+  /**
+   * Opens a Položky navíc row for a shortfall on one, and promises the entry.
+   *
+   * A row of that list rather than a note: an extra is free text and a count, so what the order
+   * needs is another row exactly like the one that came up short. Nothing is said here about the
+   * money — what an extra costs is not modelled yet.
+   */
+  const addOwedToExtras = (entry: ClientLedgerEntryDto) => {
+    const owed = owedPieces(entry);
+    if (owed <= 0) return;
+
+    const description = extraLineName(entry);
+    const key = lineNameKey(description);
+    const previous = extras.find((e) => lineNameKey(e.description) === key)?.quantity ?? null;
+
+    setExtras((prev) => {
+      if (!prev.some((e) => lineNameKey(e.description) === key)) {
+        return [...prev, { description, quantity: owed, note: '' }];
+      }
+      return prev.map((e) => (lineNameKey(e.description) === key
+        ? { ...e, quantity: Math.max(e.quantity, owed) }
+        : e));
+    });
+
+    promise(entry, {
+      target: 'extras', key, lineKind: OrderLineKind.Normal, previousQuantity: previous,
+    });
+  };
+
+  /**
+   * Opens a vratka row for empties the client did not hand back, and promises the entry.
+   *
+   * A vratka rather than a cart line: there is no product to price, only a name and a count. The
+   * name is the key the row is matched back by, so an existing row of the same name is topped up
+   * instead of a second one being opened beside it.
+   */
+  const addOwedToReturns = (entry: ClientLedgerEntryDto) => {
+    const owed = owedPieces(entry);
+    if (owed <= 0) return;
+
+    const name = returnLineName(entry);
+    const previous = returns.find((r) => lineNameKey(r.name) === lineNameKey(name))?.quantity ?? null;
+    setReturns((prev) => {
+      const existing = prev.find((r) => lineNameKey(r.name) === lineNameKey(name));
+      if (!existing) return [...prev, { name, quantity: owed, note: '' }];
+      return prev.map((r) => (lineNameKey(r.name) === lineNameKey(name)
+        ? { ...r, quantity: Math.max(r.quantity, owed) }
+        : r));
+    });
+
+    promise(entry, {
+      target: 'returns',
+      key: lineNameKey(name),
+      lineKind: OrderLineKind.Normal,
+      previousQuantity: previous,
+    });
+  };
+
+  /**
+   * Writes an open point onto the order as a note, and promises it.
+   *
+   * No line: cash to collect, a deposit to hand back and a plain remark have nothing to load and
+   * nothing to bill. What the delivery needs is for somebody to be told, so the order carries the
+   * sentence and the point closes when the order arrives.
+   */
+  const addLedgerNote = (entry: ClientLedgerEntryDto) => {
+    const text = ledgerNoteText(entry, formatMoney);
+    if (notes.some((n) => n.text.trim() === text)) return;
+
+    setNotes((prev) => [...prev, { text }]);
+    promise(entry, {
+      target: 'notes', key: text, lineKind: OrderLineKind.Normal, previousQuantity: null,
+    });
+  };
+
+  /**
+   * Takes a promise back, and with it what adding it did to the draft.
+   *
+   * The row goes only if the add opened it. One that was already there for its own sake is put
+   * back to the count it had — deleting it would throw away something nobody asked to delete.
+   * A promise made by an earlier save has no record here: there is nothing in this draft to undo,
+   * so only the promise is dropped and the line stays for the operator to adjust.
+   */
+  const unpromiseLedgerEntry = (entry: ClientLedgerEntryDto) => {
+    const recorded = ledgerAdds.find((a) => a.entryId === entry.id);
+
+    if (recorded) {
+      restoreRow(recorded);
+    } else {
+      // A promise from an earlier save has no record of what adding it did, so it is undone by
+      // the arithmetic that made it: the add raised the row by what the point needed, so this
+      // lowers it by the same and drops a row that empties out.
+      const derived = rowFor(entry);
+      if (derived) lowerRow(derived);
+    }
+
+    setSettledEntryIds((prev) => prev.filter((id) => id !== entry.id));
+    setLedgerAdds((prev) => prev.filter((a) => a.entryId !== entry.id));
+  };
+
+  /** Puts a row back where it was before the add: to its old count, or gone if it had none. */
+  const restoreRow = (add: LedgerAdd) => {
+    const sameKind = (kind?: OrderLineKind) => lineKindName(kind) === lineKindName(add.lineKind);
+
+    if (add.target === 'cart') {
+      const isTheRow = (c: CartLine) => c.productId === add.key && sameKind(c.lineKind);
+      setCart((prev) => (add.previousQuantity == null
+        ? prev.filter((c) => !isTheRow(c))
+        : prev.map((c) => (isTheRow(c) ? { ...c, quantity: add.previousQuantity! } : c))));
+    } else if (add.target === 'goods') {
+      const isTheRow = (g: DraftGoodLine) => g.supplierGoodId === add.key && sameKind(g.lineKind);
+      setGoodLines((prev) => (add.previousQuantity == null
+        ? prev.filter((g) => !isTheRow(g))
+        : prev.map((g) => (isTheRow(g) ? { ...g, quantity: add.previousQuantity! } : g))));
+    } else if (add.target === 'extras') {
+      setExtras((prev) => (add.previousQuantity == null
+        ? prev.filter((e) => lineNameKey(e.description) !== add.key)
+        : prev.map((e) => (lineNameKey(e.description) === add.key
+          ? { ...e, quantity: add.previousQuantity! }
+          : e))));
+    } else if (add.target === 'returns') {
+      setReturns((prev) => (add.previousQuantity == null
+        ? prev.filter((r) => lineNameKey(r.name) !== add.key)
+        : prev.map((r) => (lineNameKey(r.name) === add.key
+          ? { ...r, quantity: add.previousQuantity! }
+          : r))));
+    } else {
+      setNotes((prev) => prev.filter((n) => n.text.trim() !== add.key));
+    }
+  };
+
+  /** Takes back exactly what the point needed, dropping the row when nothing is left of it. */
+  const lowerRow = (row: { target: LedgerAdd['target']; key: string; lineKind: OrderLineKind; needed: number }) => {
+    const sameKind = (kind?: OrderLineKind) => lineKindName(kind) === lineKindName(row.lineKind);
+    const lowered = (quantity: number) => quantity - row.needed;
+
+    if (row.target === 'cart') {
+      const isTheRow = (c: CartLine) => c.productId === row.key && sameKind(c.lineKind);
+      setCart((prev) => prev
+        .map((c) => (isTheRow(c) ? { ...c, quantity: lowered(c.quantity) } : c))
+        .filter((c) => c.quantity > 0));
+    } else if (row.target === 'goods') {
+      const isTheRow = (g: DraftGoodLine) => g.supplierGoodId === row.key && sameKind(g.lineKind);
+      setGoodLines((prev) => prev
+        .map((g) => (isTheRow(g) ? { ...g, quantity: lowered(g.quantity) } : g))
+        .filter((g) => g.quantity > 0));
+    } else if (row.target === 'extras') {
+      setExtras((prev) => prev
+        .map((e) => (lineNameKey(e.description) === row.key ? { ...e, quantity: lowered(e.quantity) } : e))
+        .filter((e) => e.quantity > 0));
+    } else if (row.target === 'returns') {
+      setReturns((prev) => prev
+        .map((r) => (lineNameKey(r.name) === row.key ? { ...r, quantity: lowered(r.quantity) } : r))
+        .filter((r) => r.quantity > 0));
+    } else {
+      setNotes((prev) => prev.filter((n) => n.text.trim() !== row.key));
+    }
+  };
+
+  // How much of each promised entry's product the cart holds, so the row can say
+  // "dluh 3 ks · přidáno 2 ks" and the save can ask about the shortfall.
+  const inCartByEntryId = useMemo(() => {
+    // Keyed by product AND kind: one product can sit in the cart twice, and a debt is carried by
+    // the private line. Keying by product alone reported whichever line came last.
+    const byRow = new Map(cart.map((c) => [cartKey(c), c.quantity]));
+    return new Map(
+      openLedger
+        .filter((e) => e.id && e.productId)
+        .map((e) => [
+          e.id!,
+          byRow.get(cartKey({ productId: e.productId!, lineKind: OrderLineKind.Private })) ?? 0,
+        ]),
+    );
+  }, [cart, openLedger]);
+
+  // The same for the goods lines, keyed by the good the entry points at.
+  const inGoodsByEntryId = useMemo(() => {
+    const byGood = new Map(goodLines
+      .filter((g) => lineKindName(g.lineKind) === 'Private')
+      .map((g) => [g.supplierGoodId, g.quantity]));
+    return new Map(
+      openLedger
+        .filter((e) => e.id && isGoodSettleable(e))
+        .map((e) => [e.id!, byGood.get(e.supplierGoodId!) ?? 0]),
+    );
+  }, [goodLines, openLedger]);
+
+  // The same for the bill-only rows, so a billable entry can say how much of it the draft
+  // already carries. Both catalogs, because either can be the thing that was taken.
+  const inBillByEntryId = useMemo(() => {
+    const billedProducts = new Map(cart
+      .filter((c) => lineKindName(c.lineKind) === 'BillOnly')
+      .map((c) => [c.productId, c.quantity]));
+    const billedGoods = new Map(goodLines
+      .filter((g) => lineKindName(g.lineKind) === 'BillOnly')
+      .map((g) => [g.supplierGoodId, g.quantity]));
+
+    return new Map(
+      openLedger
+        .filter((e) => e.id && isBillable(e))
+        .map((e) => [
+          e.id!,
+          (e.productId ? billedProducts.get(e.productId) : billedGoods.get(e.supplierGoodId!)) ?? 0,
+        ]),
+    );
+  }, [cart, goodLines, openLedger]);
+
+  // The same for the Položky navíc, keyed by the row's description.
+  const inExtrasByEntryId = useMemo(() => {
+    const byName = new Map(extras.map((e) => [lineNameKey(e.description), e.quantity]));
+    return new Map(
+      openLedger
+        .filter((e) => e.id && isExtraSettleable(e))
+        .map((e) => [e.id!, byName.get(lineNameKey(extraLineName(e))) ?? 0]),
+    );
+  }, [extras, openLedger]);
+
+  // The same for the vratky, keyed by the row's name — a vratka has no id to match on until it
+  // is saved, and the name is what opened the row in the first place.
+  const inReturnsByEntryId = useMemo(() => {
+    const byName = new Map(returns.map((r) => [lineNameKey(r.name), r.quantity]));
+    return new Map(
+      openLedger
+        .filter((e) => e.id && isReturnSettleable(e))
+        .map((e) => [e.id!, byName.get(lineNameKey(returnLineName(e))) ?? 0]),
+    );
+  }, [returns, openLedger]);
 
   // Supplier-good lines mirror the product handlers, keyed by good id. A line's `id`
   // survives quantity edits so the backend patches the row rather than replacing it.
@@ -683,19 +1007,20 @@ export function OrderEditor({
       .map((g) => (g.supplierGoodId === goodId ? { ...g, quantity: g.quantity + delta } : g))
       .filter((g) => g.quantity > 0));
   };
-  const removeGood = (goodId: string) => setGoodLines((prev) => prev.filter((g) => g.supplierGoodId !== goodId));
-  const setCartNote = (productId: string, note: string) => setCart((prev) => prev
-    .map((c) => (c.productId === productId ? { ...c, note } : c)));
+  const removeGood = (goodId: string) => {
+    const row = goodLines.find((g) => g.supplierGoodId === goodId);
+    setGoodLines((prev) => prev.filter((g) => g.supplierGoodId !== goodId));
+    if (row) releaseRow('goods', goodId, row.lineKind ?? OrderLineKind.Normal);
+  };
+  const setCartNote = (key: string, note: string) => setCart((prev) => prev
+    .map((c) => (cartKey(c) === key ? { ...c, note } : c)));
 
   // Which cart lines have their note field revealed. A line that already carries a
   // note counts as revealed without an entry, so a loaded order shows its notes.
-  const isNoteOpen = (line: CartLine) => noteOpen[line.productId] ?? Boolean(line.note);
-  const toggleNote = (line: CartLine) => setNoteOpen((prev) => ({ ...prev, [line.productId]: !isNoteOpen(line) }));
+  const isNoteOpen = (line: CartLine) => noteOpen[cartKey(line)] ?? Boolean(line.note);
+  const toggleNote = (line: CartLine) => setNoteOpen((prev) => ({ ...prev, [cartKey(line)]: !isNoteOpen(line) }));
 
-  const matchesSearch = (p: ProductListItemDto) => {
-    const q = search.trim().toLowerCase();
-    return !q || (p.name ?? '').toLowerCase().includes(q);
-  };
+  const matchesSearch = (p: ProductListItemDto) => matchesQuery(p, search);
 
   // Sorted before the search filter, so the list and the tab's own count agree on
   // one order — the same one "Procházet dle pivovaru" uses.
@@ -713,21 +1038,11 @@ export function OrderEditor({
   // and the browse tab flashed an empty catalog while the product list was still in flight.
   const catalogLoading = clientId ? historyQuery.isLoading : allProductsQuery.isLoading;
 
-  const kindCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const b of breweries) {
-      for (const k of b.kinds ?? []) {
-        // Keyed by member name. Keying by the raw wire value left every KIND_TABS lookup
-        // missing against real (string) data, which dropped all five buttons and left the
-        // "Vše" reset standing on its own.
-        const kind = kindName(k.kind) ?? 'Other';
-        const n = flattenKind(k).filter(matchesSearch).length;
-        if (n) counts.set(kind, (counts.get(kind) ?? 0) + n);
-      }
-    }
-    return counts;
+  const kindCounts = useMemo(
+    () => countsByKind(breweries, matchesSearch),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [breweries, search]);
+    [breweries, search],
+  );
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
@@ -735,9 +1050,44 @@ export function OrderEditor({
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
-  // Persist only (no navigation); returns the saved id or null on failure.
-  const persist = async (): Promise<string | null> => {
+  /**
+   * Promised entries the cart does not fully cover.
+   *
+   * Resolution is binary: an entry assigned to an order closes whole when that order arrives,
+   * so a debt of three settled with two loses the third. That cost cannot be prevented in a
+   * binary model — it can only be made visible before it is paid.
+   */
+  const shortfalls = openLedger
+    .filter((e) => e.id && settledEntryIds.includes(e.id)
+      && (isSettleable(e) || isGoodSettleable(e) || isExtraSettleable(e)
+        || isReturnSettleable(e) || isBillable(e)))
+    .map((e) => ({
+      entry: e,
+      owed: isBillable(e) ? billablePieces(e) : owedPieces(e),
+      // Whichever list is carrying it — a vratka promised for 5 crates and opened for 4 loses the
+      // fifth exactly as a cart line would, and so does a goods line.
+      inCart: (isSettleable(e)
+        ? inCartByEntryId.get(e.id!)
+        : isGoodSettleable(e)
+          ? inGoodsByEntryId.get(e.id!)
+          : isExtraSettleable(e)
+            ? inExtrasByEntryId.get(e.id!)
+            : isBillable(e)
+              ? inBillByEntryId.get(e.id!)
+              : inReturnsByEntryId.get(e.id!)) ?? 0,
+    }))
+    .filter((x) => x.inCart < x.owed);
+
+  /**
+   * Persist only (no navigation); returns the saved id or null on failure.
+   *
+   * `ignoreShortfall` is an argument rather than state on purpose: the confirmation dialog's
+   * handler closes over the render that opened it, so a flag set beside it would still read
+   * false when the save re-ran.
+   */
+  const persist = async ({ ignoreShortfall = false } = {}): Promise<string | null> => {
     if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
+    if (shortfalls.length > 0 && !ignoreShortfall) { setConfirmShortfall(true); return null; }
     // Either kind of line counts: a client asking only for a CO₂ refill has ordered.
     if (cart.length === 0 && goodLines.length === 0) { enqueueSnackbar('Přidejte alespoň jednu položku', { variant: 'warning' }); return null; }
     // Blank-name rows are scratch rows the user never filled in — drop them
@@ -766,12 +1116,13 @@ export function OrderEditor({
       supplierGoodId: g.supplierGoodId,
       quantity: g.quantity,
       note: g.note?.trim() || undefined,
+      lineKind: g.lineKind ?? OrderLineKind.Normal,
     }));
 
     try {
       let savedId: string;
       if (mode === 'edit' && orderId) {
-        await updateOrder.mutateAsync({
+        const result = await updateOrder.mutateAsync({
           id: orderId,
           data: new UpdateOrderDto({
             clientId,
@@ -781,6 +1132,7 @@ export function OrderEditor({
               quantity: c.quantity,
               reminderState: c.reminderState,
               note: c.note?.trim() || undefined,
+              lineKind: c.lineKind ?? OrderLineKind.Normal,
             })),
             returns: returnsPayload,
             notes: notesPayload,
@@ -788,10 +1140,17 @@ export function OrderEditor({
             supplierGoodItems: supplierGoodsPayload,
             deliveryAddressKind: deliveryAddress.kind,
             clientDeliveryPlaceId: deliveryAddress.placeId,
+            settledLedgerEntryIds: settledEntryIds,
           }),
         });
         savedId = orderId;
         enqueueSnackbar('Objednávka uložena.', { variant: 'success' });
+
+        // What this save undid on the run. Said out loud because it is somebody else's work: a
+        // Fakturace row that had been checked off, a line counted into the van. The server
+        // decides it — the alternative was a copy of that rule here, drifting.
+        const undone = shipmentWorkUndone(result);
+        if (undone) enqueueSnackbar(undone, { variant: 'warning' });
       } else {
         savedId = await createOrder.mutateAsync(new CreateOrderDto({
           clientId,
@@ -801,6 +1160,7 @@ export function OrderEditor({
             quantity: c.quantity,
             reminderState: c.reminderState,
             note: c.note?.trim() || undefined,
+            lineKind: c.lineKind ?? OrderLineKind.Normal,
           })),
           returns: returnsPayload,
           notes: notesPayload,
@@ -808,6 +1168,7 @@ export function OrderEditor({
           supplierGoodItems: supplierGoodsPayload,
           deliveryAddressKind: deliveryAddress.kind,
           clientDeliveryPlaceId: deliveryAddress.placeId,
+          settledLedgerEntryIds: settledEntryIds,
         }));
         enqueueSnackbar('Objednávka vytvořena.', { variant: 'success' });
       }
@@ -819,8 +1180,8 @@ export function OrderEditor({
     }
   };
 
-  const handleSave = async () => {
-    const id = await persist();
+  const handleSave = async (opts?: { ignoreShortfall?: boolean }) => {
+    const id = await persist(opts);
     if (id != null) { allowNext(); onDone(id); }
   };
 
@@ -838,14 +1199,18 @@ export function OrderEditor({
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>
-            <Button variant="contained" startIcon={<CheckIcon />} onClick={handleSave} disabled={busy}>
+            <Button variant="contained" startIcon={<CheckIcon />} onClick={() => handleSave()} disabled={busy}>
               {busy ? 'Ukládám…' : mode === 'edit' ? 'Uložit změny' : 'Vytvořit objednávku'}
             </Button>
           </>
         )}
       />
 
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1fr 380px' }, alignItems: 'start' }}>
+      {/* The right column is the tight one: a cart row carries a name and five controls, and at
+          380px the name was the only part that could give, so it ellipsized. The catalog on the
+          left has slack to spare — its rows leave a gap between the label and the +/− — so the
+          width comes out of it rather than out of the product names. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1fr 440px', xl: '1fr 480px' }, alignItems: 'start' }}>
         {/* Client, delivery address and term. First in DOM order so it leads on a
             phone: the catalog stays empty until a client is picked, so the picker
             cannot sit below the thing it unlocks. Explicit placement puts it back
@@ -1032,7 +1397,7 @@ export function OrderEditor({
                 <CatalogGroupList
                   products={recent}
                   historyBadge
-                  cartMap={cartMap}
+                  quantities={cartQuantities}
                   colorForBrewery={(id) => (id ? colorByBreweryId.get(id) : undefined)}
                   onAdd={addProduct}
                   onChange={changeQty}
@@ -1065,15 +1430,7 @@ export function OrderEditor({
                 </ToggleButtonGroup>
 
                 {(() => {
-                  const panels = breweries
-                    .map((b) => ({
-                      brewery: b,
-                      items: inDisplayOrder((b.kinds ?? [])
-                        .filter((k) => kindFilter === 'all' || kindName(k.kind) === kindFilter)
-                        .flatMap(flattenKind)
-                        .filter(matchesSearch)),
-                    }))
-                    .filter((p) => p.items.length > 0);
+                  const panels = breweryPanels(breweries, kindFilter, matchesSearch);
                   if (panels.length === 0) return <EmptyState title="Žádné produkty v této kategorii" dense />;
                   return panels.map(({ brewery, items }) => (
                     <BreweryGroupPanel
@@ -1083,7 +1440,7 @@ export function OrderEditor({
                       color={brewery.breweryId ? colorByBreweryId.get(brewery.breweryId) : undefined}
                       open={brewOpen[brewery.breweryId ?? ''] !== false}
                       onToggle={() => setBrewOpen((prev) => ({ ...prev, [brewery.breweryId ?? '']: prev[brewery.breweryId ?? ''] === false }))}
-                      cartMap={cartMap}
+                      quantities={cartQuantities}
                       onAdd={addProduct}
                       onChange={changeQty}
                     />
@@ -1105,6 +1462,26 @@ export function OrderEditor({
             overflow would keep the stickiness, but nested scroll containers are
             their own trap here — see app/CLAUDE.md. */}
         <Stack spacing={2} sx={{ gridColumn: { lg: 2 }, gridRow: { lg: 2 } }}>
+          {/* Above the cart, not beside the save button: whoever builds the next order needs to
+              see what is outstanding before they start filling it. */}
+          <ClientOpenItemsPreview
+            entries={openLedger}
+            inCartByEntryId={inCartByEntryId}
+            inGoodsByEntryId={inGoodsByEntryId}
+            inExtrasByEntryId={inExtrasByEntryId}
+            inBillByEntryId={inBillByEntryId}
+            inReturnsByEntryId={inReturnsByEntryId}
+            onAddToOrder={addOwedToOrder}
+            onAddToGoods={addOwedGoodToOrder}
+            onAddToExtras={addOwedToExtras}
+            onAddToReturns={addOwedToReturns}
+            onAddToBill={addToBill}
+            onAddNote={addLedgerNote}
+            promisedEntryIds={settledEntryIds}
+            currentOrderId={mode === 'edit' ? orderId : undefined}
+            onUnpromise={unpromiseLedgerEntry}
+          />
+
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <ShoppingCartOutlinedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
@@ -1126,23 +1503,31 @@ export function OrderEditor({
                       // Two rows per line: the product itself, and — once revealed — its note.
                       // Keeping the note out of the way unless it is wanted is what stops a
                       // twenty-line cart from doubling in height.
-                      <Box key={c.productId} sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                      <Box key={cartKey(c)} sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
                         <Stack direction="row" spacing={1.25} alignItems="center">
                           <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap title={name}>{name}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               {[kindLabel(p?.kind), p?.packageSize != null ? fmtLiters(p.packageSize) : undefined, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
                               {p?.listPriceWithVat != null && (
                                 <Box component="span" sx={{ color: (t) => t.vars!.palette.brand.amberStrong }}> · vlastní cena</Box>
                               )}
                             </Typography>
+                            {/* Its own line, below the packaging and the money: beside the name it
+                                took the width the name needed, and the name is what the reader is
+                                looking for. */}
+                            {lineKindLabel(c.lineKind) && (
+                              <Box sx={{ mt: 0.25 }}>
+                                <LedgerTag tone="info" label={lineKindLabel(c.lineKind)!} />
+                              </Box>
+                            )}
                           </Box>
-                          <IconButton size="small" onClick={() => changeQty(c.productId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
+                          <IconButton size="small" onClick={() => changeRowQty(cartKey(c), -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
                             <RemoveIcon sx={{ fontSize: 15 }} />
                           </IconButton>
                           <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{c.quantity}</Typography>
-                          <IconButton size="small" onClick={() => changeQty(c.productId, 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
+                          <IconButton size="small" onClick={() => changeRowQty(cartKey(c), 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
                             <AddIcon sx={{ fontSize: 15 }} />
                           </IconButton>
                           <IconButton
@@ -1157,7 +1542,19 @@ export function OrderEditor({
                           >
                             <StickyNote2OutlinedIcon sx={{ fontSize: 14 }} />
                           </IconButton>
-                          <IconButton size="small" onClick={() => removeProduct(c.productId)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => setKindMenu({ anchor: e.currentTarget, key: cartKey(c), isGood: false })}
+                            sx={{
+                              border: 1, borderRadius: 1.5, width: 26, height: 26,
+                              borderColor: lineKindLabel(c.lineKind) ? 'warning.main' : 'divider',
+                              color: lineKindLabel(c.lineKind) ? 'warning.dark' : 'inherit',
+                            }}
+                            aria-label={`Druh položky ${name}`}
+                          >
+                            <ReceiptLongOutlinedIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => removeRow(cartKey(c))} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
                             <DeleteIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                         </Stack>
@@ -1167,7 +1564,7 @@ export function OrderEditor({
                             fullWidth
                             placeholder="Poznámka k položce (nepovinné)"
                             value={c.note ?? ''}
-                            onChange={(e) => setCartNote(c.productId, e.target.value)}
+                            onChange={(e) => setCartNote(cartKey(c), e.target.value)}
                             slotProps={{ htmlInput: { 'aria-label': `Poznámka k položce ${name}` } }}
                             sx={{ mt: 1 }}
                           />
@@ -1190,10 +1587,15 @@ export function OrderEditor({
                         <Stack direction="row" spacing={1.25} alignItems="center">
                           <PropaneOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap title={name}>{name}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               {[supplierName, size, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
                             </Typography>
+                            {lineKindLabel(g.lineKind) && (
+                              <Box sx={{ mt: 0.25 }}>
+                                <LedgerTag tone="info" label={lineKindLabel(g.lineKind)!} />
+                              </Box>
+                            )}
                           </Box>
                           <IconButton size="small" onClick={() => changeGoodQty(g.supplierGoodId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
                             <RemoveIcon sx={{ fontSize: 15 }} />
@@ -1201,6 +1603,18 @@ export function OrderEditor({
                           <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity}</Typography>
                           <IconButton size="small" onClick={() => changeGoodQty(g.supplierGoodId, 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
                             <AddIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => setKindMenu({ anchor: e.currentTarget, key: g.supplierGoodId, isGood: true })}
+                            sx={{
+                              border: 1, borderRadius: 1.5, width: 26, height: 26,
+                              borderColor: lineKindLabel(g.lineKind) ? 'warning.main' : 'divider',
+                              color: lineKindLabel(g.lineKind) ? 'warning.dark' : 'inherit',
+                            }}
+                            aria-label={`Druh položky ${name}`}
+                          >
+                            <ReceiptLongOutlinedIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                           <IconButton size="small" onClick={() => removeGood(g.supplierGoodId)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
                             <DeleteIcon sx={{ fontSize: 14 }} />
@@ -1257,7 +1671,10 @@ export function OrderEditor({
                     />
                     <IconButton
                       size="small"
-                      onClick={() => setReturns((rs) => rs.filter((_, j) => j !== i))}
+                      onClick={() => {
+                        setReturns((rs) => rs.filter((_, j) => j !== i));
+                        releaseRow('returns', lineNameKey(r.name));
+                      }}
                       sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
                       aria-label="Odebrat vratku"
                     >
@@ -1311,7 +1728,10 @@ export function OrderEditor({
                     />
                     <IconButton
                       size="small"
-                      onClick={() => setExtras((es) => es.filter((_, j) => j !== i))}
+                      onClick={() => {
+                        setExtras((es) => es.filter((_, j) => j !== i));
+                        releaseRow('extras', lineNameKey(e.description));
+                      }}
                       sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
                       aria-label="Odebrat položku navíc"
                     >
@@ -1361,7 +1781,10 @@ export function OrderEditor({
                   />
                   <IconButton
                     size="small"
-                    onClick={() => setNotes((ns) => ns.filter((_, j) => j !== i))}
+                    onClick={() => {
+                      setNotes((ns) => ns.filter((_, j) => j !== i));
+                      releaseRow('notes', n.text.trim());
+                    }}
                     sx={{ mt: 0.5, border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main', flexShrink: 0 }}
                     aria-label="Odebrat poznámku"
                   >
@@ -1373,6 +1796,58 @@ export function OrderEditor({
           </Card>
         </Stack>
       </Box>
+
+      {/* Binary resolution has a cost, and this is where it is made visible: a debt of three
+          settled with two closes whole and loses the third. The operator either tops it up or
+          knowingly closes it and opens a new entry for the remainder. */}
+      <ConfirmDialog
+        open={confirmShortfall}
+        title="Dluh není dorovnaný"
+        destructive={false}
+        confirmLabel="Uložit i tak"
+        message={(
+          <Stack spacing={1}>
+            <Typography variant="body2">
+              Zařazené body se po doručení objednávky uzavřou celé. Zbytek se ztratí — pokud ho
+              chcete dořešit, dorovnejte množství, nebo po uložení založte na zbytek nový záznam.
+            </Typography>
+            {shortfalls.map(({ entry, owed, inCart }) => (
+              <Typography key={entry.id} variant="body2" sx={{ fontWeight: 700 }}>
+                {entry.productName ?? entry.lineName ?? 'Položka'} — dluh {owed} ks, přidáno {inCart} ks
+              </Typography>
+            ))}
+          </Stack>
+        )}
+        onConfirm={() => {
+          setConfirmShortfall(false);
+          void handleSave({ ignoreShortfall: true });
+        }}
+        onClose={() => setConfirmShortfall(false)}
+      />
+
+      {/* What a line is for. Two of the three combinations of goods and money have a use:
+          bill-only settles pieces the client already took at the door, private carries pieces
+          that were already paid for. Both are settlements of an earlier delivery, which is why
+          they live on the line rather than on the order. */}
+      <Menu
+        anchorEl={kindMenu?.anchor ?? null}
+        open={kindMenu !== null}
+        onClose={() => setKindMenu(null)}
+      >
+        {[
+          { kind: OrderLineKind.Normal, label: 'Normální', hint: 'Naloží se i fakturuje' },
+          { kind: OrderLineKind.BillOnly, label: 'Jen fakturace', hint: 'Nenaloží se, jen se dofakturuje' },
+          { kind: OrderLineKind.Private, label: 'Soukromě', hint: 'Naloží se, ale nefakturuje' },
+        ].map((option) => (
+          <MenuItem
+            key={lineKindName(option.kind)}
+            selected={kindOf(kindMenu) === option.kind}
+            onClick={() => kindMenu && setLineKind(kindMenu, option.kind)}
+          >
+            <ListItemText primary={option.label} secondary={option.hint} />
+          </MenuItem>
+        ))}
+      </Menu>
 
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>

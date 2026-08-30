@@ -82,6 +82,10 @@ public sealed class SetPurchaseInvoiceLineValidator : Validator<SetPurchaseInvoi
 ///
 /// The quantity is clamped to what the run buys of that product minus the other invoices'
 /// claims, so the remainder can never be driven negative by a too-large entry.
+///
+/// A write is rejected outright once either end of the move has been checked off in the
+/// nakládka - the target invoice, or the remainder it borrows from. See
+/// <see cref="PurchaseInvoiceSplit.CheckedBlocker"/>.
 /// </remarks>
 /// <param name="dbContext"></param>
 /// <param name="driverScope"></param>
@@ -107,7 +111,7 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext, 
             {
                 s.Summary = "Sets a product's quantity on a brewery invoice";
                 s.Responses[StatusCodes.Status204NoContent] = "Quantity stored";
-                s.Responses[StatusCodes.Status400BadRequest] = "Shipment no longer editable, or the remainder invoice was targeted";
+                s.Responses[StatusCodes.Status400BadRequest] = "Shipment no longer editable, the remainder invoice was targeted, or a column involved is already checked";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment or product not found";
             }
         );
@@ -146,6 +150,14 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext, 
         if (product is null || !PurchaseInvoiceSplit.PurchasedByProduct(shipment).ContainsKey(product.Id))
         {
             ThrowHelper.PublicEntityNotFound(nameof(Product), req.Data.ProductId);
+            return;
+        }
+
+        var blocker = PurchaseInvoiceSplit.CheckedBlocker(shipment, product.Id, req.Data.Sequence);
+        if (blocker is not null)
+        {
+            ThrowHelper.BadRequest(
+                $"Loading of this product in column {blocker} has already been checked, so its pieces can no longer be moved.");
             return;
         }
 

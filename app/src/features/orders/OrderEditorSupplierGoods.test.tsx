@@ -33,6 +33,13 @@ vi.mock('src/hooks/useOrders', () => ({
   useUpdateOrder: () => ({ mutateAsync: updateMutate, isPending: false }),
 }));
 
+// The editor reads the client's open ledger points above the cart, so the hook is mocked like
+// every other resource — and the mock can say "nothing open", which is the ordinary case.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
 vi.mock('src/hooks/useClients', () => ({
   useClients: () => ({ data: [{ id: 'client-a', name: 'Hospoda A' }], isLoading: false }),
   useClient: () => ({ data: { officialAddress: undefined, contactAddress: undefined, name: 'Hospoda A' }, isLoading: false }),

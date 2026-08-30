@@ -82,7 +82,8 @@ public sealed class ShipmentExportDocumentBuilderTests
         string? cityLine = null,
         string? deliveryPlaceName = null,
         List<string>? notes = null,
-        List<ShipmentExportReturn>? returns = null) =>
+        List<ShipmentExportReturn>? returns = null,
+        List<ShipmentExportDeviation>? deviations = null) =>
         new()
         {
             ClientName = clientName,
@@ -92,7 +93,34 @@ public sealed class ShipmentExportDocumentBuilderTests
             DeliveryPlaceName = deliveryPlaceName,
             Notes = notes ?? [],
             Returns = returns ?? [],
+            Deviations = deviations ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
+        };
+
+    /// <summary>
+    /// A short delivery of a named line — the deviation the office records most.
+    /// </summary>
+    private static ShipmentExportDeviation BuildDeviation(
+        string? lineName = "Pilsner Urquell",
+        ClientLedgerEntryTarget target = ClientLedgerEntryTarget.ProductQuantity,
+        int? planned = 24,
+        int? actual = 18,
+        string? plannedText = null,
+        string? actualText = null,
+        decimal? amount = null,
+        string? note = null,
+        bool requiresFollowUp = false) =>
+        new()
+        {
+            Target = target,
+            LineName = lineName,
+            PlannedQuantity = planned,
+            ActualQuantity = actual,
+            PlannedText = plannedText,
+            ActualText = actualText,
+            Amount = amount,
+            Note = note,
+            RequiresFollowUp = requiresFollowUp
         };
 
     /// <summary>
@@ -1298,4 +1326,102 @@ public sealed class ShipmentExportDocumentBuilderTests
         adjacent.Should().Be(0);
         children[^2].Should().NotBeOfType<Table>("a table cannot be the last content before sectPr");
     }
+
+    #region deviations
+
+    /// <summary>
+    /// Every kind of deviation in one list under the party's tables — short pieces, empties, goods
+    /// taken at the door, a redirected delivery, money owed. A correction is read as a list.
+    /// </summary>
+    [Fact]
+    public void Build_PartyWithDeviations_ListsThemAllUnderItsTables()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, deviations:
+                [
+                    BuildDeviation(note: "Sklep byl plný", requiresFollowUp: true),
+                    BuildDeviation("Sud 50 l", ClientLedgerEntryTarget.ReturnQuantity, planned: 4, actual: 1),
+                    BuildDeviation("Kozel 11", planned: 0, actual: 12),
+                    BuildDeviation(
+                        null, ClientLedgerEntryTarget.DeliveryAddress, planned: null, actual: null,
+                        plannedText: "Dlouhá 14, Brno", actualText: "Sklad Modřice"),
+                    BuildDeviation(null, ClientLedgerEntryTarget.Money, planned: null, actual: null, amount: 2400m)
+                ])
+            ])
+        ]);
+
+        var rows = TableHeaded(Open(model), "CO");
+
+        rows[0].Should().Equal("CO", "PLÁN", "SKUTEČNOST", "POZNÁMKA");
+        rows[1].Should().Equal("Pilsner Urquell", "24 ks", "18 ks", "Sklep byl plný · k vyřešení");
+        rows[2].Should().Equal("Sud 50 l", "4 ks", "1 ks", "—");
+        rows[3].Should().Equal("Kozel 11", "0 ks", "12 ks", "—");
+        rows[4].Should().Equal("Místo dodání", "Dlouhá 14, Brno", "Sklad Modřice", "—");
+
+        // cs-CZ groups thousands with a non-breaking space.
+        rows[5][0].Should().Be("Peníze");
+        rows[5][2].Replace('\u00A0', ' ').Should().Be("Klient dluží 2 400 Kč");
+    }
+
+    /// <summary>
+    /// Which way the debt runs is spelled out rather than signed: this is the one figure in the file
+    /// somebody acts on, and a leading minus is too easy to read past.
+    /// </summary>
+    [Fact]
+    public void Build_MoneyWeOwe_NamesTheDirection()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, deviations:
+                [
+                    BuildDeviation(null, ClientLedgerEntryTarget.Money, planned: null, actual: null, amount: -900m)
+                ])
+            ])
+        ]);
+
+        TableHeaded(Open(model), "CO")[1][2].Should().Be("Dlužíme 900 Kč");
+    }
+
+    /// <summary>
+    /// A party with nothing to bill and something to correct is a correction, not an empty order —
+    /// "Bez položek" would claim the client ordered nothing.
+    /// </summary>
+    [Fact]
+    public void Build_PartyWithOnlyDeviations_DoesNotClaimTheClientOrderedNothing()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products: [], deviations: [BuildDeviation()])
+            ])
+        ]);
+
+        var body = Open(model);
+
+        Paragraphs(body).Should().NotContain("Bez položek");
+        TableHeaded(body, "CO").Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// A run that went to plan carries no deviations section at all — the plan scope strips them, and
+    /// an empty "Odchylky" heading reads as data that failed to load.
+    /// </summary>
+    [Fact]
+    public void Build_PartyThatWentToPlan_HasNoDeviationsSection()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        Paragraphs(Open(model)).Should().NotContain("Odchylky");
+    }
+
+    #endregion
 }

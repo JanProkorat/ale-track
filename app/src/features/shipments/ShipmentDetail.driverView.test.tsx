@@ -17,6 +17,18 @@ import { ShipmentDetail } from './ShipmentDetail';
 const listQuery = { data: [], isLoading: false, isPending: false, isError: false };
 const noMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 
+// The Vykládka, the Vratky card and the Extra položky card all read the run's clients' ledgers,
+// so the hook is mocked like every other resource. Its "nothing recorded" answer is the ordinary
+// case, and the one every assertion here is written against.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedgersMany: () => ({ byClient: new Map(), loading: new Set() }),
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('src/hooks/useShipments', () => ({
   useUpdateShipment: () => noMutation,
   useSetPreparationStep: () => noMutation,
@@ -25,6 +37,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetSupplierGoodSourcing: () => noMutation,
   useReorderShipmentStops: () => noMutation,
   useSetStockPurchase: () => noMutation,
+  useSetStopCompletion: () => noMutation,
   useExportShipment: () => noMutation,
   useShipmentStartPoints: () => listQuery,
   // Reached through AddressChangedBanner rather than the detail itself.
@@ -33,6 +46,11 @@ vi.mock('src/hooks/useShipments', () => ({
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => listQuery }));
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => listQuery }));
 vi.mock('src/hooks/useBreweries', () => ({ useBreweryColors: () => ({}) }));
+// The Vykládka reads pickup stops' opening hours off the suppliers themselves; this run has
+// no supplier stop, so an empty map is the whole of it.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliersMany: () => ({ bySupplier: new Map(), loading: new Set<string>() }),
+}));
 vi.mock('src/hooks/usePurchaseInvoices', () => ({
   useAddPurchaseInvoice: () => noMutation,
   useDeletePurchaseInvoice: () => noMutation,

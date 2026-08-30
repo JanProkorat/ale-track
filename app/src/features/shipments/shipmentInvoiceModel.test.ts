@@ -11,7 +11,7 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  bandAddress, bandNotes, bandOrderId, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
   invoiceValue, isCrossBilled, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
@@ -539,7 +539,8 @@ describe('invoiceParties', () => {
 describe('otherClientCount', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   it('is zero for a band billing only its own client', () => {
@@ -562,10 +563,54 @@ describe('otherClientCount', () => {
   });
 });
 
+describe('bandOrderId', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
+  });
+
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A, orderId: 'order-a',
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  it('gives the order the band takes delivery on', () => {
+    expect(bandOrderId(band(), [stop()])).toBe('order-a');
+  });
+
+  // Same reason bandAddress matches this way: a client can hold two stops, and the wrong one
+  // would send the office to the wrong order.
+  it('matches on stop order, not client id, when a client has two stops', () => {
+    const result = bandOrderId(band({ stopOrder: 2 }), [
+      stop({ id: 'st1', order: 1, orderId: 'order-first' }),
+      stop({ id: 'st2', order: 2, orderId: 'order-second' }),
+    ]);
+
+    expect(result).toBe('order-second');
+  });
+
+  it('falls back to client id when the band carries no stop order', () => {
+    expect(bandOrderId(band({ stopOrder: undefined }), [stop()])).toBe('order-a');
+  });
+
+  // A payer linked to another client's order holds no stop of its own — there is no order of
+  // its own to open, and a link to nothing is worse than plain text.
+  it('gives nothing for a payer that takes no delivery', () => {
+    expect(bandOrderId(band({ stopOrder: 7 }), [stop()])).toBeUndefined();
+  });
+
+  // The two queries can briefly disagree; a stop without an order is a custom or company stop.
+  it('gives nothing when the matched stop carries no order', () => {
+    expect(bandOrderId(band(), [stop({ orderId: undefined })])).toBeUndefined();
+  });
+});
+
 describe('bandAddress', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({
@@ -657,7 +702,8 @@ describe('bandAddress', () => {
 describe('bandNotes', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({
@@ -700,7 +746,8 @@ describe('bandNotes', () => {
 describe('bandReturns', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({

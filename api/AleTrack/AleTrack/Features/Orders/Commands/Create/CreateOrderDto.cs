@@ -60,6 +60,14 @@ public sealed record CreateOrderDto
     /// </summary>
     public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
 
+    /// <summary>
+    /// Public IDs of the client's open ledger entries this order is going to settle.
+    /// </summary>
+    /// <remarks>
+    /// Assigning does not settle anything: the entries close when this order is actually
+    /// delivered, because promising is not delivering.
+    /// </remarks>
+    public List<Guid> SettledLedgerEntryIds { get; set; } = [];
 }
 
 /// <summary>
@@ -78,6 +86,13 @@ public sealed record CreateOrderItemDto
     /// </summary>
     public int Quantity { get; set; }
     
+    /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// Defaults to <see cref="OrderLineKind.Normal"/>, so an older client that does not send it
+    /// keeps writing ordinary lines.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; } = OrderLineKind.Normal;
+
     /// <summary>
     /// State of the reminder for this item.
     /// </summary>

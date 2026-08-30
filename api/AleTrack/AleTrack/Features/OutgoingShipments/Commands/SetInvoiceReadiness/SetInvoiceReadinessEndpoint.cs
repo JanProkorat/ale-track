@@ -103,6 +103,8 @@ public sealed class SetInvoiceReadinessEndpoint(AleTrackDbContext dbContext, IDr
             return;
         }
 
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
+
         var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.ClientId, ct);
 
         // A client with no row of its own — a sub-client billed through its payer, or one not on the

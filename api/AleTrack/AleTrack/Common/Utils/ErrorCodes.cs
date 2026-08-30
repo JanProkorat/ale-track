@@ -80,6 +80,11 @@ public static class ErrorCodes
     /// Error code for case when an outgoing shipment cannot be marked as loaded without any stops
     /// </summary>
     public const string ShipmentCannotBeLoadedWithoutStops = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment cannot be marked as loaded with no vehicle
+    /// </summary>
+    public const string ShipmentCannotBeLoadedWithoutVehicle = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_VEHICLE";
     
     /// <summary>
     /// Error code for case when an outgoing shipment is already delivered
@@ -165,6 +170,36 @@ public static class ErrorCodes
     /// Error code for case when payment is confirmed on a sale that is not awaiting one.
     /// </summary>
     public const string SaleNotAwaitingPayment = "SALE_NOT_AWAITING_PAYMENT";
+
+    /// <summary>
+    /// Error code for case when a run's invoicing is already filed and would be changed.
+    /// </summary>
+    public const string ShipmentInvoicingFiled = "SHIPMENT_INVOICING_FILED";
+
+    /// <summary>
+    /// Error code for case when a run would be filed with invoice rows still unfinished.
+    /// </summary>
+    public const string ShipmentInvoicingIncomplete = "SHIPMENT_INVOICING_INCOMPLETE";
+
+    /// <summary>
+    /// Error code for case when a run cannot be filed at all — a cancelled one.
+    /// </summary>
+    public const string ShipmentInvoicingNotFileable = "SHIPMENT_INVOICING_NOT_FILEABLE";
+
+    /// <summary>
+    /// Error code for case when a settled ledger entry would be handed to an order to settle.
+    /// </summary>
+    public const string LedgerEntryAlreadyResolved = "LEDGER_ENTRY_ALREADY_RESOLVED";
+
+    /// <summary>
+    /// Error code for case when an order of one client would take on another client's entry.
+    /// </summary>
+    public const string LedgerEntryClientMismatch = "LEDGER_ENTRY_CLIENT_MISMATCH";
+
+    /// <summary>
+    /// Error code for case when a second order would promise to settle the same entry.
+    /// </summary>
+    public const string LedgerEntryAlreadyAssigned = "LEDGER_ENTRY_ALREADY_ASSIGNED";
 
     /// <summary>
     /// Error code for case when a client's own product price is zero or negative.

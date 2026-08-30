@@ -16,6 +16,7 @@ import {
   Country,
   OutgoingShipmentDetailDto,
   OutgoingShipmentOrderItemDto,
+  OutgoingShipmentPreparationStepDto,
   OutgoingShipmentState,
   DeliveryAddressKind,
   type IOutgoingShipmentDetailDto,
@@ -23,6 +24,8 @@ import {
   OutgoingShipmentStopKind,
   OutgoingShipmentSupplierGoodDto,
   ProductKind,
+  DayOfWeek,
+  SupplierOpeningHoursDto,
   ShipmentDriverDto,
   ShipmentStartPointKind,
   ShipmentVehicleDto,
@@ -31,6 +34,18 @@ import { theme } from 'src/theme/theme';
 
 // Hoisted rather than a fresh spy per call so the export tests can assert what was surfaced.
 const enqueueSnackbar = vi.hoisted(() => vi.fn());
+// The Vykládka, the Vratky card and the Extra položky card all read the run's clients' ledgers,
+// so the hook is mocked like every other resource. Its "nothing recorded" answer is the ordinary
+// case, and the one every assertion here is written against.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedgersMany: () => ({ byClient: new Map(), loading: new Set() }),
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
 
 // The real helper drives an <a download> click, which happy-dom cannot act on. Saving the file is
@@ -67,6 +82,7 @@ const setShipmentStateMutate = vi.hoisted(() => vi.fn());
 const setOrderItemSourcingMutate = vi.hoisted(() => vi.fn());
 const reorderStopsMutate = vi.hoisted(() => vi.fn());
 const setStockPurchaseMutate = vi.hoisted(() => vi.fn());
+const setStopCompletionMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 // Mutable so the start-point test below can assert against a specific company
 // entry without every other test in this file having to know about it — the
@@ -92,6 +108,9 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetSupplierGoodSourcing: () => ({ mutate: vi.fn(), isPending: false }),
   useReorderShipmentStops: () => ({ mutate: reorderStopsMutate, isPending: false }),
   useSetStockPurchase: () => ({ mutate: setStockPurchaseMutate, isPending: false }),
+  // Marking a stop finished from the Vykládka; fired on click only, and covered as a hook in
+  // useSetStopCompletion.test.tsx.
+  useSetStopCompletion: () => ({ mutate: setStopCompletionMutate, isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
   // String "kind" here, deliberately not the numeric enum member — the real
   // backend serializes every enum as its string name (JsonStringEnumConverter,
@@ -101,6 +120,13 @@ vi.mock('src/hooks/useShipments', () => ({
   useShipmentStartPoints: () => ({ data: startPointsData.value, isPending: false, isError: false }),
 }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLoading: false }) }));
+// The suppliers behind the run's pickup stops, which the Vykládka reads opening hours off.
+// Mutable so the hours test can hand back a schedule while every other test here stays unaware
+// that suppliers exist at all.
+const suppliersById = vi.hoisted(() => ({ value: new Map<string, unknown>() }));
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliersMany: () => ({ bySupplier: suppliersById.value, loading: new Set<string>() }),
+}));
 // The nakládka's brewery-invoice columns: the product catalogue feeds the
 // "Zboží na sklad" picker, and the split/loading writes are mutations the
 // screen only calls on click. Mocked for the same reason as the rest — this
@@ -151,6 +177,9 @@ vi.mock('src/providers/CurrencyProvider', () => ({
 }));
 
 const { ShipmentDetail } = await import('./ShipmentDetail');
+
+// Every test starts with suppliers nobody has looked up: the hours line is opt-in per test.
+beforeEach(() => { suppliersById.value = new Map(); });
 
 function officialAddress(): AddressDto {
   return new AddressDto({ streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.897, longitude: 14.808 });
@@ -294,10 +323,322 @@ describe('ShipmentDetail — lifecycle affordances', () => {
     ['in transit', OutgoingShipmentState.InTransit],
   ])('withdraws "Zboží na sklad" once the content is frozen (%s)', (_label, state) => {
     renderEditableDetail(state);
+    // A run on the road opens on Vykládka now (loadingView.ts), where neither button belongs.
+    // The toolbar under test is the loading list's, so select it the way the office would.
+    fireEvent.click(screen.getByRole('button', { name: 'Nakládka' }));
 
     expect(screen.queryByRole('button', { name: 'Zboží na sklad' })).not.toBeInTheDocument();
-    // The rest of the nakládka header stays live: the freeze is about content, not progress.
+    // "Faktura pivovaru" goes with it now, but for the other reason: the whole table is locked on
+    // a packed run until the office unlocks it. Unlocking brings that one back and not this one —
+    // opening a stock purchase is a different run, not a correction of this one's loading list.
+    expect(screen.queryByRole('button', { name: 'Faktura pivovaru' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Odemknout' }));
     expect(screen.getByRole('button', { name: 'Faktura pivovaru' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zboží na sklad' })).not.toBeInTheDocument();
+  });
+});
+
+// The API refuses InTransit and Delivered on a run that is not fully planned, so the header must
+// not offer the step. Which fields count is pinned in departureReadiness.test.ts; what the screen
+// owes is the disabled button.
+// The card served the packing of the van, and opened on the loading list because of it. Once the
+// run is Na cestě that list is history — the stop-by-stop unload order is what the office and the
+// driver work through. Which state maps to which view is pinned in loadingView.test.ts.
+describe('ShipmentDetail — the view the loading card opens on', () => {
+  function runAt(state: OutgoingShipmentState) {
+    return new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state, driverIds: [], stops: [officialStop()],
+    });
+  }
+
+  function renderRun(state: OutgoingShipmentState) {
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={runAt(state)} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  /** The SegControl marks its active option with aria-pressed. */
+  const tab = (label: string) => screen.getByRole('button', { name: label });
+
+  it('opens on the loading list while the van is still being packed', () => {
+    renderRun(OutgoingShipmentState.Loaded);
+
+    expect(tab('Nakládka')).toHaveAttribute('aria-pressed', 'true');
+    expect(tab('Vykládka')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it.each([
+    ['na cestě', OutgoingShipmentState.InTransit],
+    ['doručeno', OutgoingShipmentState.Delivered],
+  ])('opens on the unload view once the van is out (%s)', (_label, state) => {
+    renderRun(state);
+
+    expect(tab('Vykládka')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('switches over when the run departs while the screen is open', () => {
+    const { rerender } = renderRun(OutgoingShipmentState.Loaded);
+    expect(tab('Nakládka')).toHaveAttribute('aria-pressed', 'true');
+
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={runAt(OutgoingShipmentState.InTransit)} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(tab('Vykládka')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The rule sets the view, it does not hold it: a run out on the road whose loading list the
+  // office deliberately opens must not be dragged back on the next refetch.
+  it('leaves a deliberate switch back alone', () => {
+    const { rerender } = renderRun(OutgoingShipmentState.InTransit);
+
+    fireEvent.click(tab('Nakládka'));
+    expect(tab('Nakládka')).toHaveAttribute('aria-pressed', 'true');
+
+    // Same run, same state — what a refetch of the detail query hands back.
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={runAt(OutgoingShipmentState.InTransit)} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(tab('Nakládka')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+// The list used to drop every stop the van calls at to collect, which left the driver's list
+// disagreeing with the route it belongs to. Which stops survive is pinned in unloadOrder.test.ts
+// and the hours line in supplierStopHours.test.ts; this is the wiring between them — the screen
+// has to fetch the supplier and hold its schedule against the run's own date.
+describe('ShipmentDetail — a pickup stop in the Vykládka', () => {
+  function pickupStop() {
+    return new OutgoingShipmentStopDto({
+      id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+      label: 'Linde Gas', supplierId: 'sup-linde',
+      supplierAddress: new AddressDto({
+        streetName: 'Průmyslová', streetNumber: '12', city: 'Liberec', zip: '46001',
+        country: Country.Czechia,
+      }),
+    } as never);
+  }
+
+  /** A run leaving on Monday 2026-08-24 at 07:30, so a Monday schedule is the one read out. */
+  function renderRun() {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava',
+      state: OutgoingShipmentState.InTransit,
+      deliveryDate: new Date(2026, 7, 24, 7, 30),
+      driverIds: [],
+      stops: [pickupStop(), officialStop()],
+      supplierGoods: [new OutgoingShipmentSupplierGoodDto({
+        id: 'good-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, supplierId: 'sup-linde',
+      })],
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  it('lists the pickup with what is collected there', () => {
+    renderRun();
+
+    // A run on the road opens on Vykládka, so the list is already the one showing.
+    const list = within(screen.getByTestId('unload-list'));
+    expect(list.getByText('Linde Gas')).toBeInTheDocument();
+    expect(list.getByText(/Průmyslová 12/)).toBeInTheDocument();
+    expect(list.getByText('CO₂ láhev')).toBeInTheDocument();
+  });
+
+  it("reads out the supplier's hours for the run's own day", () => {
+    suppliersById.value = new Map([['sup-linde', {
+      id: 'sup-linde',
+      openingHours: [
+        new SupplierOpeningHoursDto({ dayOfWeek: DayOfWeek.Monday, from: '07:00:00', to: '15:30:00' }),
+      ],
+    }]]);
+
+    renderRun();
+
+    expect(screen.getByText('Po 7:00–15:30')).toBeInTheDocument();
+  });
+
+  it('warns when the van would arrive to a closed gate', () => {
+    suppliersById.value = new Map([['sup-linde', {
+      id: 'sup-linde',
+      openingHours: [
+        // Opens two hours after the run sets off.
+        new SupplierOpeningHoursDto({ dayOfWeek: DayOfWeek.Monday, from: '09:30:00', to: '15:30:00' }),
+      ],
+    }]]);
+
+    renderRun();
+
+    expect(screen.getByText('Po 9:30–15:30 · zavřeno')).toBeInTheDocument();
+  });
+
+  it('says nothing about hours for a supplier with no schedule', () => {
+    renderRun();
+
+    // Scoped: Přehled zastávek names the same stop, and this is about the Vykládka's row.
+    const list = within(screen.getByTestId('unload-list'));
+    expect(list.getByText('Linde Gas')).toBeInTheDocument();
+    expect(list.queryByText(/zavřeno/)).not.toBeInTheDocument();
+  });
+});
+
+// Nobody tracks the van: the drivers ring in, and the office ticks the stop off here. Only while
+// the run is on the road — which is also the only state the endpoint takes it in.
+// The map's stats bar is where the route is read, so the run's own departure belongs among them.
+// The stat itself is covered in RouteMap.test.tsx; this is only that the screen hands its date over.
+describe('ShipmentDetail — the departure on the map', () => {
+  it("passes the run's date and time to the map", () => {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Loaded, driverIds: [],
+      deliveryDate: new Date(2026, 7, 26, 7, 30),
+      stops: [officialStop()],
+    });
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(routeMapProps).toHaveBeenCalled();
+    const last = routeMapProps.mock.calls.at(-1)![0] as { startAt?: Date };
+    expect(last.startAt).toEqual(new Date(2026, 7, 26, 7, 30));
+  });
+
+  it('hands over nothing for a run with no date yet', () => {
+    renderDetail([officialStop()]);
+
+    const last = routeMapProps.mock.calls.at(-1)![0] as { startAt?: Date };
+    expect(last.startAt).toBeUndefined();
+  });
+});
+
+describe('ShipmentDetail — marking a stop finished', () => {
+  // The spy is hoisted and shared with every other test in this file, so calls from the previous
+  // one would otherwise be read as this one's.
+  beforeEach(() => setStopCompletionMutate.mockClear());
+
+  function renderRun(state: OutgoingShipmentState, editable = true, completedAt?: Date) {
+    const stop = officialStop();
+    if (completedAt) (stop as unknown as { completedAt?: Date }).completedAt = completedAt;
+
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state, driverIds: [],
+      deliveryDate: new Date(2026, 7, 24, 7, 30),
+      vehicleId: 'van-1',
+      stops: [stop],
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={editable} canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  /** The Vykládka's own mark button, inside the list rather than the header. */
+  const markButtons = () => within(screen.getByTestId('unload-list'))
+    .queryAllByRole('button', { name: /^(Označit jako hotovo|Hotovo .* kliknutím zrušit)$/ });
+
+  it('writes the mark against the stop while the run is on the road', () => {
+    renderRun(OutgoingShipmentState.InTransit);
+
+    fireEvent.click(markButtons()[0]);
+
+    expect(setStopCompletionMutate).toHaveBeenCalledTimes(1);
+    expect(setStopCompletionMutate.mock.calls[0][0]).toEqual({ stopId: 'stop-2', isCompleted: true });
+  });
+
+  it('takes the mark back on a stop already finished', () => {
+    renderRun(OutgoingShipmentState.InTransit, true, new Date(2026, 7, 24, 14, 32));
+
+    fireEvent.click(markButtons()[0]);
+
+    expect(setStopCompletionMutate.mock.calls[0][0]).toEqual({ stopId: 'stop-2', isCompleted: false });
+  });
+
+  // Before departure there is nothing to have finished; afterwards the marks are a record. The
+  // endpoint refuses both, so offering the button would only produce a 400.
+  it.each([
+    ['naloženo', OutgoingShipmentState.Loaded],
+    ['doručeno', OutgoingShipmentState.Delivered],
+  ])('offers no mark off the road (%s)', (_label, state) => {
+    renderRun(state);
+    // The loading card opens on Nakládka before departure, so put the list on screen first.
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(markButtons()).toHaveLength(0);
+  });
+
+  it('offers no mark to a viewer who cannot edit, but still shows when the stop was done', () => {
+    renderRun(OutgoingShipmentState.InTransit, false, new Date(2026, 7, 24, 14, 32));
+
+    const list = within(screen.getByTestId('unload-list'));
+    expect(markButtons()).toHaveLength(0);
+    expect(list.getByText('14:32')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — departure readiness', () => {
+  function renderRun(over: Partial<IOutgoingShipmentDetailDto>) {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Loaded,
+      deliveryDate: new Date('2026-08-27T00:00:00Z'),
+      vehicleId: 'van-1',
+      driverIds: ['driver-1'],
+      drivers: [new ShipmentDriverDto({ id: 'driver-1', firstName: 'Jan', lastName: 'Řidič' })],
+      stops: [officialStop()],
+      ...over,
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  const departButton = () => screen.getByRole('button', { name: 'Vyrazit' });
+
+  it('lets a fully planned run leave', () => {
+    renderRun({});
+
+    expect(departButton()).toBeEnabled();
+  });
+
+  it('refuses to send a run out with nobody driving it', () => {
+    renderRun({ driverIds: [], drivers: [] });
+
+    expect(departButton()).toBeDisabled();
+  });
+
+  // Not a driver-only check: it mirrors the whole of HasFilledData, so a run whose van was never
+  // picked is held back too, rather than 400ing on click.
+  it('holds back a run with no van', () => {
+    renderRun({ vehicleId: undefined });
+
+    expect(departButton()).toBeDisabled();
+  });
+
+  it('still blocks delivery of a run that lost its driver on the road', () => {
+    renderRun({ state: OutgoingShipmentState.InTransit, driverIds: [], drivers: [] });
+
+    expect(screen.getByRole('button', { name: 'Doručit' })).toBeDisabled();
+  });
+
+  // Loading has its own, laxer rule on the API side (stops only), so the readiness check must not
+  // reach back and gate it.
+  it('leaves loading alone on a run with no driver', () => {
+    renderRun({ state: OutgoingShipmentState.Created, driverIds: [], drivers: [] });
+
+    expect(screen.getByRole('button', { name: 'Naložit' })).toBeEnabled();
   });
 });
 
@@ -1167,6 +1508,99 @@ describe('ShipmentDetail — the nakládka table', () => {
     expect(setLoadingStateMutate).toHaveBeenCalledTimes(1);
     expect(setLoadingStateMutate.mock.calls[0][0]).toMatchObject({
       productId: 'product-1', sequence: 1, state: 'Dictated',
+    });
+  });
+
+  // A packed truck's loading list has already been acted on, so the table reads as finished from
+  // Naloženo onwards. The office can still get in — a pallet miscounted on the ramp has to be
+  // fixable — but by unlocking it on purpose, not by clicking a live stepper by accident.
+  describe('the lock on a packed run', () => {
+    function renderAt(state: OutgoingShipmentState) {
+      const shipment = new OutgoingShipmentDetailDto({
+        id: 'ship-1', name: 'Rozvoz Žitava', state, driverIds: [], stops: [stopWithProduct()],
+        preparationSteps: [new OutgoingShipmentPreparationStepDto({
+          id: 'step-1', order: 1, label: 'Zkontrolovat plachtu', isDone: false,
+        })],
+      });
+      const result = render(
+        <MuiThemeProvider theme={theme}>
+          <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
+        </MuiThemeProvider>,
+      );
+      // From Na cestě on, the card opens on Vykládka (loadingView.ts). Every assertion below is
+      // about the loading list's own controls, so put it on screen first — the lock is about
+      // whether they take edits, not about which tab is showing.
+      fireEvent.click(screen.getByRole('button', { name: 'Nakládka' }));
+      return result;
+    }
+
+    /** The sourcing stepper — gone entirely when the table takes no edits. */
+    const stepper = () => screen.queryByLabelText('Přidat kus z garáže');
+    /** The per-invoice loading control — kept, but disabled, so the row still reads out. */
+    const loadingTick = () => screen.getByLabelText('Nakládka na faktuře 1: Nenaloženo');
+
+    it.each([
+      ['loaded', OutgoingShipmentState.Loaded],
+      ['in transit', OutgoingShipmentState.InTransit],
+    ])('locks every control on the table (%s)', (_label, state) => {
+      renderAt(state);
+
+      expect(screen.getByText('Uzamčeno')).toBeInTheDocument();
+      expect(stepper()).not.toBeInTheDocument();
+      expect(loadingTick()).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Faktura pivovaru' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Odemknout' })).toBeInTheDocument();
+    });
+
+    it('hands the table back, amber, once the office unlocks it', () => {
+      renderAt(OutgoingShipmentState.Loaded);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Odemknout' }));
+
+      expect(screen.getByText('Odemčeno')).toBeInTheDocument();
+      expect(screen.getByText(/Úpravy nakládky provádějte jen v nutném případě/)).toBeInTheDocument();
+      expect(stepper()).toBeInTheDocument();
+      expect(loadingTick()).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Faktura pivovaru' })).toBeInTheDocument();
+    });
+
+    it('shuts it again on the second thought', () => {
+      renderAt(OutgoingShipmentState.Loaded);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Odemknout' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Zamknout' }));
+
+      expect(screen.getByText('Uzamčeno')).toBeInTheDocument();
+      expect(stepper()).not.toBeInTheDocument();
+    });
+
+    it('says nothing about locks while the run is still being planned', () => {
+      renderAt(OutgoingShipmentState.Created);
+
+      expect(screen.queryByText('Uzamčeno')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Odemknout' })).not.toBeInTheDocument();
+      expect(stepper()).toBeInTheDocument();
+    });
+
+    // A finished run is a record, not something to reopen: it locks with no way back in, which is
+    // what it did before the unlock existed.
+    it('offers no unlock on a delivered run', () => {
+      renderAt(OutgoingShipmentState.Delivered);
+
+      expect(screen.queryByRole('button', { name: 'Odemknout' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Uzamčeno')).not.toBeInTheDocument();
+      expect(stepper()).not.toBeInTheDocument();
+      expect(loadingTick()).toBeDisabled();
+    });
+
+    // The lock is the table's alone. The checklist is worked down while the van is packed and on
+    // the road, so catching it would break the one card that most needs to stay live. (Fakturace
+    // reads the same wider flag; its own editability is covered in ShipmentInvoicing.test.tsx,
+    // and the query is stubbed empty here.)
+    it('leaves the checklist tickable while the table is locked', () => {
+      renderAt(OutgoingShipmentState.Loaded);
+
+      expect(screen.getByLabelText('Zkontrolovat plachtu')).toBeEnabled();
     });
   });
 

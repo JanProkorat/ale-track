@@ -179,9 +179,56 @@ public sealed class ExportSelectionTests
         confirmations.Single(c => c.ClientId == scenario.Kout.PublicId).LastExportedAt.Should().BeNull();
     }
 
+    /// <summary>
+    /// The scope reaches the writer: asked for the corrections of a run that went to plan, the file
+    /// has no invoice part to write, while the plan still has one.
+    /// </summary>
+    /// <remarks>
+    /// Through the selector rather than the endpoint, because the endpoint hands its bytes to the
+    /// response and a test cannot read a spreadsheet back out of it. What is being pinned is the
+    /// wiring — that the request's scope is what the model was narrowed by — and the scopes' own
+    /// meanings are pinned in ShipmentExportScopeFilterTests.
+    /// </remarks>
+    [Fact]
+    public async Task Load_ChangedScope_RunThatWentToPlan_CarriesNoInvoicePart()
+    {
+        var scenario = Scenario.Build();
+
+        var plan = await Load(scenario, ShipmentExportScope.Plan);
+        var changed = await Load(scenario, ShipmentExportScope.Changed);
+
+        plan.Model.Invoices.Should().NotBeEmpty();
+        plan.Scope.Should().Be(ShipmentExportScope.Plan);
+
+        changed.Model.Invoices.Should().BeEmpty();
+        changed.Scope.Should().Be(ShipmentExportScope.Changed);
+    }
+
+    /// <summary>
+    /// Naming no scope keeps the file the office already knows.
+    /// </summary>
+    [Fact]
+    public async Task Load_NoScope_IsThePlan()
+    {
+        var selection = await Load(Scenario.Build(), null);
+
+        selection.Scope.Should().Be(ShipmentExportScope.Plan);
+    }
+
     #endregion
 
     #region helpers
+
+    private static Task<ShipmentExportSelection> Load(Scenario scenario, ShipmentExportScope? scope)
+    {
+        var request = Request(scenario, [scenario.Lva.PublicId], null);
+
+        if (scope is not null)
+            request.Data.Scope = scope.Value;
+
+        return ShipmentExportSelector.LoadAsync(
+            scenario.Mock().Object, request, Company, CancellationToken.None);
+    }
 
     private static Task ExportExcel(
         Scenario scenario,

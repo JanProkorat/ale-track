@@ -97,6 +97,7 @@ public static class ShipmentContentSnapshotWriter
             Type = product?.Type ?? default,
             PackageSize = product?.PackageSize,
             UnitsPerPackage = product?.UnitsPerPackage ?? 1,
+            LineKind = item.LineKind,
             Quantity = item.Quantity,
             UnitPriceWithVat = resolved?.PriceWithVat ?? 0m,
             UnitPriceWithoutVat = resolved?.PriceWithoutVat,

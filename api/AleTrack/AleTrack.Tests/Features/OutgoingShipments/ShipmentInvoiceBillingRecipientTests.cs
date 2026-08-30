@@ -243,6 +243,23 @@ public sealed class ShipmentInvoiceBillingRecipientTests
             .Which.ClientId.Should().Be(scenario.SubWithOrder.PublicId);
     }
 
+    /// <summary>
+    /// Filed paperwork does not move: the addresses on it are what was sent, so naming a different
+    /// set now would rewrite a document that has already left the building.
+    /// </summary>
+    [Fact]
+    public async Task Set_OnAFiledRun_IsRefused()
+    {
+        var scenario = Scenario.Build();
+        scenario.Shipment.InvoicingFiledAt = new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Utc);
+
+        var act = () => Set(scenario, scenario.Mock(), [scenario.SubWithOrder.PublicId]);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.PayerInvoice.BillingRecipients.Should().BeEmpty();
+    }
+
     #endregion
 
     #region helpers

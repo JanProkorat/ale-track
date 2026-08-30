@@ -23,6 +23,16 @@ public sealed record OutgoingShipmentDetailDto
     public OutgoingShipmentState State { get; set; }
 
     /// <summary>
+    /// Whether the run's invoicing has been filed — the one-way door after which its orders are
+    /// closed to editing and the Vykládka begins offering to record deviations instead.
+    /// </summary>
+    /// <remarks>
+    /// On the run rather than on each stop: filing is one act for the whole run, and a copy per
+    /// stop would invite the copies to disagree.
+    /// </remarks>
+    public bool IsInvoicingFiled { get; set; }
+
+    /// <summary>
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;
@@ -340,6 +350,23 @@ public sealed record OutgoingShipmentStopDto
     public bool IsAddressOverridden { get; set; }
 
     /// <summary>
+    /// Whether the Fakturace row covering this stop's order is marked finished — which is what
+    /// opens recording a deviation against it. See <see cref="Utils.InvoiceReadiness"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the stop rather than read from the invoicing endpoint so the unload list needs
+    /// no second query, and so a caller denied the Fakturace capability still gets the flag: what
+    /// it gates is a client record, not an invoice.
+    /// </remarks>
+    public bool IsInvoiceReady { get; set; }
+
+    /// <summary>
+    /// When the run finished with this stop, or null while it has not. Set by hand from the
+    /// vykládka while the run is on the road.
+    /// </summary>
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>
     /// Set when an order edit changed the delivery address under this shipment
     /// and nobody has acknowledged it yet. Drives the banner.
     /// </summary>
@@ -475,6 +502,14 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     public Guid OrderItemId { get; set; }
 
     /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// A <see cref="OrderLineKind.BillOnly"/> line is on the wire so the Fakturace can bill it;
+    /// the nakládka and the vykládka leave it out.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
+
+
+    /// <summary>
     /// The order line's own note — an instruction for whoever loads or delivers it.
     /// Read-only here; owned and edited by the order.
     /// </summary>
@@ -507,6 +542,13 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
 /// </summary>
 public sealed record OutgoingShipmentSupplierGoodDto
 {
+    /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// A <see cref="OrderLineKind.BillOnly"/> line is on the wire so the Fakturace can bill it;
+    /// the nakládka and the vykládka leave it out.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
+
     /// <summary>Public ID of the order line this came from.</summary>
     public Guid Id { get; set; }
 
