@@ -20,7 +20,10 @@ import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { PriceWithList } from 'src/components/common/PriceWithList';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, orderNumber, shipmentNumber } from 'src/lib/format';
-import { ORDER_STATUS, SHIP_STATUS, chargeKindLabel, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
+import {
+  ORDER_STATUS, SHIP_STATUS, chargeKindLabel, lineKindLabel, orderStateName, reminderStateName,
+  reminderStateValue, shipStateName,
+} from 'src/lib/labels';
 import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
 import { useClientProductHistory } from 'src/hooks/useOrders';
@@ -33,7 +36,7 @@ import {
   addressEntry, applyLedger, entriesForOrder, entriesForTarget, planRow,
   type DecoratedRow,
 } from 'src/features/clients/ledgerModel';
-import { LedgerRowTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
+import { LedgerRowTag, LedgerTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
 import { LedgerMoneyCard } from 'src/features/clients/LedgerMoneyCard';
 import { LedgerEntryDrawer } from 'src/features/clients/LedgerEntryDrawer';
 import {
@@ -42,6 +45,34 @@ import {
 import { ClientOpenItemsCard } from 'src/features/clients/ClientOpenItemsCard';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
+
+/**
+ * Widths of the Položky table's columns.
+ *
+ * A flex list has no colgroup, so the head lines up with the rows only while both read these.
+ * `action` is the footprint of a small IconButton plus its left margin: rows without one hold
+ * the gap open, or the numbers of a row that has a control sit a column to the left of the rest.
+ */
+const ITEM_COLS = { qty: 96, money: 84, action: 42 };
+
+/**
+ * A name in the header that opens the client.
+ *
+ * A button rather than an anchor: the detour carries the way back with it through router state,
+ * which a bare href cannot. It inherits the type it sits in, so the header reads the same whether
+ * the user may open a client or not — only the pointer and the hover rule appear.
+ */
+const clientLinkSx = {
+  border: 0,
+  background: 'none',
+  p: 0,
+  font: 'inherit',
+  color: 'inherit',
+  cursor: 'pointer',
+  textAlign: 'left',
+  display: 'inline',
+  '&:hover': { textDecoration: 'underline' },
+};
 
 function StatusFlow({ stateName }: { stateName: string }) {
   const current = FLOW.indexOf(stateName);
@@ -178,6 +209,7 @@ export function OrderDetail({
   onEdit,
   onDelete,
   onOpenShipment,
+  onOpenClient,
   canRecordDeviation = false,
 }: {
   order: OrderDto;
@@ -193,6 +225,8 @@ export function OrderDetail({
    *  resolved by the page, like `editable`, so the detail stays renderable
    *  without an auth provider. */
   onOpenShipment?: (shipmentId: string) => void;
+  /** Opens the client this order is for. Left undefined when the user cannot see clients. */
+  onOpenClient?: (clientId: string) => void;
   /** Whether the user may record a deviation — the ledger rides on Clients : Edit, not Orders. */
   canRecordDeviation?: boolean;
 }) {
@@ -280,6 +314,11 @@ export function OrderDetail({
   // promised to settle.
   const canCancelOrder = editable && canEditOrder;
 
+  // Whether the Položky table holds a trailing column for its row controls at all: the hlídání
+  // bell on a beer line, the delete on a door-side addition. Neither is on every row, so the
+  // gutter is decided once for the table rather than per row.
+  const hasItemActions = (editable && canEditOrder) || canRecordNow;
+
   // The plan the drawer diffs against is the order's own quantity, which is also what was
   // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype
   // shows an "objednáno 4, naloženo 6" case; the real model has no way to load more than the
@@ -361,6 +400,16 @@ export function OrderDetail({
   const shipment = order.outgoingShipment && onOpenShipment ? order.outgoingShipment : undefined;
   const openShipment = () => shipment?.id && onOpenShipment?.(shipment.id);
 
+  const clientId = order.client?.id;
+  const openClient = clientId && onOpenClient ? () => onOpenClient(clientId) : undefined;
+  /** Either name, as a link to the client while the user may open one. Inherits the type it
+   *  sits in, so the caller decides how the name looks and this decides only that it opens. */
+  const clientLink = (text: string) => (openClient
+    ? <Box component="button" type="button" onClick={openClient} sx={clientLinkSx}>{text}</Box>
+    // Still its own element unlinked: the two names share the lead's line, and a bare string
+    // would leave them one run of text with the dash.
+    : <Box component="span">{text}</Box>);
+
   // Every sidebar card hides when empty, so the whole column can be absent.
   // Counts the diffed rows rather than the stored ones: a return handed over against an order
   // that planned none exists only as a deviation, and hiding the column would leave the
@@ -386,7 +435,17 @@ export function OrderDetail({
         backLabel={backLabel}
         title={orderNumber(order.id)}
         titleMono
-        lead={order.client?.name ?? '—'}
+        lead={(
+          <>
+            {clientLink(order.client?.name ?? '—')}
+            {order.client?.businessName && (
+              <>
+                <Box component="span" sx={{ opacity: 0.55 }}> - </Box>
+                {clientLink(order.client.businessName)}
+              </>
+            )}
+          </>
+        )}
         status={<StatusPill tone={status.tone} label={status.label} />}
         meta={[
           <>
@@ -462,11 +521,36 @@ export function OrderDetail({
           entirely rather than left as dead space beside the items. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: hasSidebar ? '1.5fr 1fr' : '1fr' }, alignItems: 'start' }}>
         <CollapsibleCard title="Položky" count={items.length + goodItems.length}>
-          <Box sx={{ px: 2.5, py: 1 }}>
-            {items.length === 0 && goodItems.length === 0 ? (
+          {items.length === 0 && goodItems.length === 0 ? (
+            <Box sx={{ px: 2.5, py: 1 }}>
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Objednávka nemá žádné položky.</Typography>
-            ) : (
-              <Box sx={{ '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+            </Box>
+          ) : (
+            <>
+              <Box
+                sx={{
+                  display: 'flex',
+                  px: 2.5,
+                  py: 1.25,
+                  bgcolor: (t) => t.vars!.palette.brand.surface2,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: 'text.secondary',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>Produkt</Box>
+                <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.qty, textAlign: 'right' }}>Množství</Box>
+                <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right' }}>Cena/ks</Box>
+                <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right' }}>Celkem</Box>
+                {hasItemActions && <Box sx={{ width: ITEM_COLS.action, flexShrink: 0 }} />}
+              </Box>
+
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {items.map((it) => {
                   const rs = reminderStateName(effState(it.id ?? '', it.reminderState));
                   const row = rowFor(itemRows, it.id);
@@ -478,18 +562,25 @@ export function OrderDetail({
                             {it.productName}
                           </Typography>
                           {row && <LedgerRowTag row={row} />}
+                          {/* Why a line reads oddly against the run: bill-only pieces never
+                              travelled, private ones travelled unbilled. */}
+                          {lineKindLabel(it.lineKind) && (
+                            <LedgerTag tone="info" label={lineKindLabel(it.lineKind)!} />
+                          )}
                         </Stack>
                         {rs === 'Added' && <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 700 }}>hlídáno</Typography>}
                         {rs === 'Resolved' && <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>vyřešeno</Typography>}
                         {it.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{it.note}</Typography>}
                       </Box>
-                      {row
-                        ? <QuantityDiff row={row} />
-                        : <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>}
-                      <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                      <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.qty, textAlign: 'right' }}>
+                        {row
+                          ? <QuantityDiff row={row} />
+                          : <Typography component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>}
+                      </Box>
+                      <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right' }}>
                         <PriceWithList price={it.unitPriceWithVat} listPrice={it.listPriceWithVat} size={13} />
                       </Box>
-                      <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      <Typography sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                         {formatMoney((it.unitPriceWithVat ?? 0) * (row?.actualQuantity ?? it.quantity ?? 0))}
                       </Typography>
                       {editable && canEditOrder && (
@@ -503,6 +594,9 @@ export function OrderDetail({
                             {rs === 'Added' ? <NotificationsActiveIcon fontSize="small" /> : <NotificationsNoneIcon fontSize="small" />}
                           </IconButton>
                         </Tooltip>
+                      )}
+                      {hasItemActions && !(editable && canEditOrder) && (
+                        <Box sx={{ width: ITEM_COLS.action, flexShrink: 0 }} />
                       )}
                     </Box>
                   );
@@ -519,21 +613,27 @@ export function OrderDetail({
                           {g.goodName}
                         </Typography>
                         {row && <LedgerRowTag row={row} />}
+                        {lineKindLabel(g.lineKind) && (
+                          <LedgerTag tone="info" label={lineKindLabel(g.lineKind)!} />
+                        )}
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {[g.supplierName, g.goodSize, chargeKindLabel(g.chargeKind)].filter(Boolean).join(' · ')}
                       </Typography>
                       {g.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{g.note}</Typography>}
                     </Box>
-                    {row
-                      ? <QuantityDiff row={row} />
-                      : <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity} ks</Typography>}
-                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                    <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.qty, textAlign: 'right' }}>
+                      {row
+                        ? <QuantityDiff row={row} />
+                        : <Typography component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity} ks</Typography>}
+                    </Box>
+                    <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right' }}>
                       <PriceWithList price={g.unitPriceWithVat} />
                     </Box>
-                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    <Typography sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                       {formatMoney((g.unitPriceWithVat ?? 0) * (row?.actualQuantity ?? g.quantity ?? 0))}
                     </Typography>
+                    {hasItemActions && <Box sx={{ width: ITEM_COLS.action, flexShrink: 0 }} />}
                   </Box>
                   );
                 })}
@@ -552,13 +652,15 @@ export function OrderDetail({
                         <LedgerRowTag row={row} />
                       </Stack>
                     </Box>
-                    <QuantityDiff row={row} />
-                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                    <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.qty, textAlign: 'right' }}>
+                      <QuantityDiff row={row} />
+                    </Box>
+                    <Box sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right' }}>
                       <PriceWithList price={unitPrice} />
                     </Box>
                     {/* A dash only while the catalog is still loading, or for a product it does
                         not hold: a zero would read as free. */}
-                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', ...(unitPrice == null ? { color: 'text.disabled', fontWeight: 400 } : {}) }}>
+                    <Typography sx={{ ml: 1.5, minWidth: ITEM_COLS.money, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', ...(unitPrice == null ? { color: 'text.disabled', fontWeight: 400 } : {}) }}>
                       {unitPrice == null ? '—' : formatMoney(unitPrice * row.actualQuantity)}
                     </Typography>
                     {canRecordNow && row.entry?.id && (
@@ -572,6 +674,9 @@ export function OrderDetail({
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                    )}
+                    {hasItemActions && !(canRecordNow && row.entry?.id) && (
+                      <Box sx={{ width: ITEM_COLS.action, flexShrink: 0 }} />
                     )}
                   </Box>
                   );
@@ -597,10 +702,11 @@ export function OrderDetail({
                       {formatMoney(deliveredTotal)}
                     </Typography>
                   )}
+                  {hasItemActions && <Box sx={{ width: ITEM_COLS.action, flexShrink: 0 }} />}
                 </Box>
               </Box>
-            )}
-          </Box>
+            </>
+          )}
         </CollapsibleCard>
 
         {hasSidebar && (

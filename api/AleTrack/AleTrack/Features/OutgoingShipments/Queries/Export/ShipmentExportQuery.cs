@@ -97,8 +97,13 @@ public static class ShipmentExportQuery
                         // these sheets carry no brewery column, so grouping by a supplier the reader
                         // cannot see would look arbitrary. Reading by degree is what the customer
                         // asked for. Spelled out because EF cannot translate a method call here.
+                        // A bill-only line is left out: nothing of it travels, so it belongs on
+                        // neither the loading sheet nor the stop's own. Its billed row still
+                        // appears in the invoice part, with nothing in the "skutečně" column —
+                        // which is the truth about it.
                         Products = s.ClientOrder != null
                             ? s.ClientOrder.OrderItems
+                                .Where(oi => oi.LineKind != OrderLineKind.BillOnly)
                                 .OrderBy(oi => oi.Product.Type == ProductType.Lemonade
                                             || oi.Product.Type == ProductType.Merchandise
                                             || oi.Product.Type == ProductType.Other ? 1 : 0)

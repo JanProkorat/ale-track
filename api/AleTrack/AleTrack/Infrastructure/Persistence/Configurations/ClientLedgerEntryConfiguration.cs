@@ -43,6 +43,11 @@ public sealed class ClientLedgerEntryConfiguration : IEntityTypeConfiguration<Cl
             .HasForeignKey(e => e.SupplierGoodItemId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(e => e.SupplierGood)
+            .WithMany()
+            .HasForeignKey(e => e.SupplierGoodId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(e => e.CustomExtraItem)
             .WithMany()
             .HasForeignKey(e => e.CustomExtraItemId)
@@ -74,8 +79,9 @@ public sealed class ClientLedgerEntryConfiguration : IEntityTypeConfiguration<Cl
         // NULLS NOT DISTINCT is what makes it bite — with Postgres's default, two rows whose
         // line columns are all null count as distinct and the constraint would never fire. The
         // column list is the pairing key the upsert looks the entry up by: a planned line pairs
-        // on its own id, a door-side product on the product, a door-side return or extra on its
-        // free-text name, and an address change on nothing but its order.
+        // on its own id, a door-side product or supplier good on the product or the good, a
+        // door-side return or extra on its free-text name, and an address change on nothing but
+        // its order.
         //
         // Money and Other are excluded (targets 5 and 6): they are free rows, not lines, and a
         // client legitimately has several open at once — "owes us 500" and "we owe 300" are two
@@ -88,6 +94,7 @@ public sealed class ClientLedgerEntryConfiguration : IEntityTypeConfiguration<Cl
                 e.OrderItemId,
                 e.ProductId,
                 e.SupplierGoodItemId,
+                e.SupplierGoodId,
                 e.CustomExtraItemId,
                 e.OrderReturnId,
                 e.LineName

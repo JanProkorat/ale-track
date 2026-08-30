@@ -169,6 +169,17 @@ public static class ThrowHelper
             ErrorCodes.ShipmentCannotBeLoadedWithoutStops);
 
     /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an outgoing shipment cannot be marked as
+    /// loaded because no vehicle is assigned to it.
+    /// </summary>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void ShipmentCannotBeLoadedWithoutVehicle()
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentCannotBeLoadedWithoutVehicle);
+
+    /// <summary>
     /// Throws an <see cref="AleTrackException"/> when an outgoing shipment cannot be deleted because it has already been delivered.
     /// </summary>
     /// <param name="shipmentId">ID of the outgoing shipment</param>

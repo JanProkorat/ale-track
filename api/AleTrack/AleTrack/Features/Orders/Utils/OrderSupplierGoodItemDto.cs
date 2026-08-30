@@ -26,6 +26,11 @@ public sealed record OrderSupplierGoodItemDto
     /// <summary>Optional free-form note about this line.</summary>
     public string? Note { get; set; }
 
+    /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
+
     /// <summary>Name of the good, for display. Read-only.</summary>
     public string? GoodName { get; set; }
 

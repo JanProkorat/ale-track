@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ClientLedgerEntryDto, ClientLedgerEntryTarget, DeliveryAddressKind, OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
+import { ClientLedgerEntryDto, ClientLedgerEntryTarget, DeliveryAddressKind, OrderLineKind, OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
 import { unloadOrder } from './unloadOrder';
 
 const orderStop = (order: number, clientName: string, products: unknown[] = []) =>
@@ -71,6 +71,30 @@ describe('unloadOrder', () => {
     expect(result[0].lines).toEqual([
       { name: 'Kozel 12°', quantity: 24, chip: 'Basa · 0,5 l · 12°' },
     ]);
+  });
+
+  // A bill-only line's pieces were handed over on an earlier run, so a row for them here would
+  // read as something the driver has forgotten to unload.
+  it('leaves a bill-only line off the stop', () => {
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Kozel 12°', quantity: 24, kind: ProductKind.Bottle, platoDegree: 12, packageSize: 0.5 },
+      { name: 'Dofakturace', quantity: 3, kind: ProductKind.Bottle, lineKind: OrderLineKind.BillOnly },
+    ]);
+
+    const result = unloadOrder([stop], [], []);
+
+    expect(result[0].lines.map((l) => l.name)).toEqual(['Kozel 12°']);
+  });
+
+  // The other direction: these pieces really are on the van, they are simply not billed.
+  it('keeps a private line on the stop', () => {
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Soukromý sud', quantity: 1, kind: ProductKind.Keg, lineKind: OrderLineKind.Private },
+    ]);
+
+    const result = unloadOrder([stop], [], []);
+
+    expect(result[0].lines.map((l) => l.name)).toEqual(['Soukromý sud']);
   });
 
   it('tells the same beer in two packages apart by its kind, not by the degree they share', () => {

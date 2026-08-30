@@ -78,7 +78,8 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                 Client = new ClientInfoDto
                 {
                     Id = o.Client.PublicId,
-                    Name = o.Client.Name
+                    Name = o.Client.Name,
+                    BusinessName = o.Client.BusinessName
                 },
                 DeliveryAddress = new OrderDeliveryAddressDto
                 {
@@ -115,6 +116,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,
                         ReminderState = i.ReminderState,
+                        LineKind = i.LineKind,
                         Note = i.Note,
                         BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
                         DisplayOrder = i.Product.DisplayOrder
@@ -151,6 +153,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         SupplierGoodId = i.SupplierGood.PublicId,
                         Quantity = i.Quantity,
                         Note = i.Note,
+                        LineKind = i.LineKind,
                         GoodName = i.SupplierGood.Name,
                         GoodSize = i.SupplierGood.Size,
                         SupplierId = i.SupplierGood.Supplier.PublicId,

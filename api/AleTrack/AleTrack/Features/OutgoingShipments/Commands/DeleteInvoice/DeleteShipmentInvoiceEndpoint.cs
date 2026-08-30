@@ -113,6 +113,10 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, I
         // pieces are untouched — they hang off the shipment, not off any invoice.
         var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
 
+        // Private lines hang off no navigation EF walks, so they are added explicitly.
+        if (reconcileResult.AddedPrivateLines.Count > 0)
+            dbContext.OutgoingShipmentInvoiceLines.AddRange(reconcileResult.AddedPrivateLines);
+
         if (reconcileResult.RemovedLines.Count > 0)
             dbContext.OutgoingShipmentInvoiceLines.RemoveRange(reconcileResult.RemovedLines);
 

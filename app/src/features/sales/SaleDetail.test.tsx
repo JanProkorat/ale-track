@@ -233,7 +233,9 @@ describe('SaleDetail', () => {
         payment: SalePaymentMethod.Invoice,
         billing: new SaleBillingDetailDto({
           name: 'Na Rohu gastro s.r.o.',
-          dueDate: new Date('2026-08-27'),
+          // Relative to now, not a fixed day: the banner this asserts is the not-yet-overdue one,
+          // so a hard-coded date turns the test red the morning after it passes.
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         } as never),
       })
     );

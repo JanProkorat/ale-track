@@ -178,6 +178,42 @@ public sealed class ShipmentStateEndpointTests
             .Where(e => e.ErrorCode == ErrorCodes.ShipmentCannotBeLoadedWithoutStops);
     }
 
+    /// <summary>
+    /// Reported: a run went to Naloženo with no van assigned. Nakládka is pieces going into one
+    /// particular van — the loading list is checked off against its capacity and the state freezes
+    /// the run's content as loaded, neither of which means anything without the van.
+    /// </summary>
+    [Fact]
+    public async Task SetState_ToLoadedWithoutAVan_IsRejected()
+    {
+        var f = BuildFixture();
+        f.Shipment.VehicleId = null;
+        f.Shipment.Vehicle = null;
+
+        var act = async () => await StateEndpoint(MockFor(f))
+            .HandleAsync(StateRequest(f, OutgoingShipmentState.Loaded), CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentCannotBeLoadedWithoutVehicle);
+    }
+
+    /// <summary>
+    /// Loading a van in the yard does not need a driver or a date — only leaving does, which is
+    /// what the checks below cover.
+    /// </summary>
+    [Fact]
+    public async Task SetState_ToLoadedWithoutADriverOrDate_IsAllowed()
+    {
+        var f = BuildFixture();
+        f.Shipment.Drivers.Clear();
+        f.Shipment.DeliveryDate = null;
+
+        await StateEndpoint(MockFor(f))
+            .HandleAsync(StateRequest(f, OutgoingShipmentState.Loaded), CancellationToken.None);
+
+        f.Shipment.State.Should().Be(OutgoingShipmentState.Loaded);
+    }
+
     [Fact]
     public async Task SetState_ToInTransitWithoutAVan_IsRejected()
     {

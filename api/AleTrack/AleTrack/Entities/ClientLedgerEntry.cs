@@ -79,6 +79,22 @@ public sealed class ClientLedgerEntry : PublicEntity
     public long? SupplierGoodItemId { get; set; }
 
     /// <summary>
+    /// The good of that line, kept alongside <see cref="SupplierGoodItemId"/> for the reason
+    /// <see cref="ProductId"/> is kept alongside <see cref="OrderItemId"/>: it is what identifies
+    /// a good handed over with no line on the order at all.
+    /// </summary>
+    [Column("supplier_good_id")]
+    public long? SupplierGoodId { get; set; }
+
+    /// <summary>
+    /// Good name as it was when the entry was written, so the row stays readable after the good
+    /// leaves the supplier's price list.
+    /// </summary>
+    [MaxLength(100)]
+    [Column("good_name")]
+    public string? GoodName { get; set; }
+
+    /// <summary>
     /// The custom extra line this is about. Set for
     /// <see cref="ClientLedgerEntryTarget.CustomExtraQuantity"/>.
     /// </summary>
@@ -233,6 +249,11 @@ public sealed class ClientLedgerEntry : PublicEntity
     /// The affected supplier-good line.
     /// </summary>
     public OrderSupplierGoodItem? SupplierGoodItem { get; set; }
+
+    /// <summary>
+    /// The good itself, for a good handed over without a line on the order.
+    /// </summary>
+    public SupplierGood? SupplierGood { get; set; }
 
     /// <summary>
     /// The affected custom extra line.

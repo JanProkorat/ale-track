@@ -13,7 +13,7 @@ import type {
   OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto, OutgoingShipmentSupplierGoodDto,
   ProductKind,
 } from 'src/generated/api-client';
-import { kindLabel, stopKindName } from 'src/lib/labels';
+import { kindLabel, lineTravels, stopKindName } from 'src/lib/labels';
 import { fmtLiters } from 'src/lib/format';
 import {
   applyLedger, entriesForOrder, entriesForTarget, isOpen, planRow, type DecoratedRow,
@@ -251,10 +251,14 @@ function shapeStop(
     // The order's beer, then the supplier goods bought alongside it. Those are carried on the
     // run rather than on the stop, so they are matched back to it by order — a stop with no
     // order (a run may not have reconciled one yet) matches nothing rather than everything.
+    // Bill-only lines are left out of both lists: nothing of them comes off the van, so a row
+    // for them would read as something the driver has forgotten to hand over.
     lines: [
-      ...(stop.products ?? []).map(lineFrom),
+      ...(stop.products ?? []).filter((p) => lineTravels(p.lineKind)).map(lineFrom),
       ...(stop.orderId != null
-        ? supplierGoods.filter((g) => g.orderId === stop.orderId).map(supplierLineFrom)
+        ? supplierGoods
+          .filter((g) => g.orderId === stop.orderId && lineTravels(g.lineKind))
+          .map(supplierLineFrom)
         : []),
     ],
   };

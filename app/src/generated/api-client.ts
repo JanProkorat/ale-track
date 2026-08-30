@@ -18329,6 +18329,7 @@ export interface IOutgoingShipmentProductDto {
 
 export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentOrderItemDto {
     orderItemId?: string;
+    lineKind?: OrderLineKind;
     note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
@@ -18343,6 +18344,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
         super.init(_data);
         if (_data) {
             this.orderItemId = _data["orderItemId"];
+            this.lineKind = _data["lineKind"];
             this.note = _data["note"];
             this.quantityFromInventory = _data["quantityFromInventory"];
             this.inventoryItemId = _data["inventoryItemId"];
@@ -18361,6 +18363,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
+        data["lineKind"] = this.lineKind;
         data["note"] = this.note;
         data["quantityFromInventory"] = this.quantityFromInventory;
         data["inventoryItemId"] = this.inventoryItemId;
@@ -18373,11 +18376,18 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
 
 export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductDto {
     orderItemId?: string;
+    lineKind?: OrderLineKind;
     note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
     inventoryItemName?: string | undefined;
     inventoryItemAvailable?: number | undefined;
+}
+
+export enum OrderLineKind {
+    Normal = 0,
+    BillOnly = 1,
+    Private = 2,
 }
 
 export class OrderReturnDto implements IOrderReturnDto {
@@ -18598,6 +18608,7 @@ export interface IOutgoingShipmentStockPurchaseItemDto extends IOutgoingShipment
 }
 
 export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplierGoodDto {
+    lineKind?: OrderLineKind;
     id?: string;
     supplierGoodId?: string;
     name?: string;
@@ -18625,6 +18636,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 
     init(_data?: any) {
         if (_data) {
+            this.lineKind = _data["lineKind"];
             this.id = _data["id"];
             this.supplierGoodId = _data["supplierGoodId"];
             this.name = _data["name"];
@@ -18652,6 +18664,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["lineKind"] = this.lineKind;
         data["id"] = this.id;
         data["supplierGoodId"] = this.supplierGoodId;
         data["name"] = this.name;
@@ -18672,6 +18685,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
 }
 
 export interface IOutgoingShipmentSupplierGoodDto {
+    lineKind?: OrderLineKind;
     id?: string;
     supplierGoodId?: string;
     name?: string;
@@ -20709,6 +20723,7 @@ export interface IOrderDto {
 export class ClientInfoDto implements IClientInfoDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
 
     constructor(data?: IClientInfoDto) {
         if (data) {
@@ -20723,6 +20738,7 @@ export class ClientInfoDto implements IClientInfoDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
         }
     }
 
@@ -20737,6 +20753,7 @@ export class ClientInfoDto implements IClientInfoDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
         return data;
     }
 }
@@ -20744,6 +20761,7 @@ export class ClientInfoDto implements IClientInfoDto {
 export interface IClientInfoDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
 }
 
 export class OrderItemDto implements IOrderItemDto {
@@ -20754,6 +20772,7 @@ export class OrderItemDto implements IOrderItemDto {
     quantity?: number;
     unitPriceWithVat?: number;
     listPriceWithVat?: number | undefined;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -20777,6 +20796,7 @@ export class OrderItemDto implements IOrderItemDto {
             this.quantity = _data["quantity"];
             this.unitPriceWithVat = _data["unitPriceWithVat"];
             this.listPriceWithVat = _data["listPriceWithVat"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
             this.breweryDisplayOrder = _data["breweryDisplayOrder"];
@@ -20800,6 +20820,7 @@ export class OrderItemDto implements IOrderItemDto {
         data["quantity"] = this.quantity;
         data["unitPriceWithVat"] = this.unitPriceWithVat;
         data["listPriceWithVat"] = this.listPriceWithVat;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         data["breweryDisplayOrder"] = this.breweryDisplayOrder;
@@ -20816,6 +20837,7 @@ export interface IOrderItemDto {
     quantity?: number;
     unitPriceWithVat?: number;
     listPriceWithVat?: number | undefined;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -20832,6 +20854,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
     supplierGoodId?: string;
     quantity?: number;
     note?: string | undefined;
+    lineKind?: OrderLineKind;
     goodName?: string | undefined;
     goodSize?: string | undefined;
     supplierId?: string | undefined;
@@ -20854,6 +20877,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
             this.supplierGoodId = _data["supplierGoodId"];
             this.quantity = _data["quantity"];
             this.note = _data["note"];
+            this.lineKind = _data["lineKind"];
             this.goodName = _data["goodName"];
             this.goodSize = _data["goodSize"];
             this.supplierId = _data["supplierId"];
@@ -20876,6 +20900,7 @@ export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
         data["supplierGoodId"] = this.supplierGoodId;
         data["quantity"] = this.quantity;
         data["note"] = this.note;
+        data["lineKind"] = this.lineKind;
         data["goodName"] = this.goodName;
         data["goodSize"] = this.goodSize;
         data["supplierId"] = this.supplierId;
@@ -20891,6 +20916,7 @@ export interface IOrderSupplierGoodItemDto {
     supplierGoodId?: string;
     quantity?: number;
     note?: string | undefined;
+    lineKind?: OrderLineKind;
     goodName?: string | undefined;
     goodSize?: string | undefined;
     supplierId?: string | undefined;
@@ -21210,6 +21236,7 @@ export interface IUpdateOrderDto {
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 
@@ -21226,6 +21253,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
         if (_data) {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
         }
@@ -21242,6 +21270,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         return data;
@@ -21251,6 +21280,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
 export interface IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 }
@@ -21454,6 +21484,7 @@ export interface ICreateOrderDto {
 export class CreateOrderItemDto implements ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 
@@ -21470,6 +21501,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
         if (_data) {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
+            this.lineKind = _data["lineKind"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
         }
@@ -21486,6 +21518,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
+        data["lineKind"] = this.lineKind;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         return data;
@@ -21495,6 +21528,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
 export interface ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
+    lineKind?: OrderLineKind;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
 }
@@ -22594,11 +22628,14 @@ export class ClientLedgerEntryDto implements IClientLedgerEntryDto {
     target?: ClientLedgerEntryTarget;
     orderId?: string | undefined;
     orderRequiredDeliveryDate?: Date | undefined;
+    shipmentDeliveryDate?: Date | undefined;
     stopId?: string | undefined;
     orderItemId?: string | undefined;
     productId?: string | undefined;
     productName?: string | undefined;
     supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    goodName?: string | undefined;
     customExtraItemId?: string | undefined;
     orderReturnId?: string | undefined;
     lineName?: string | undefined;
@@ -22631,11 +22668,14 @@ export class ClientLedgerEntryDto implements IClientLedgerEntryDto {
             this.target = _data["target"];
             this.orderId = _data["orderId"];
             this.orderRequiredDeliveryDate = _data["orderRequiredDeliveryDate"] ? new Date(_data["orderRequiredDeliveryDate"].toString()) : undefined as any;
+            this.shipmentDeliveryDate = _data["shipmentDeliveryDate"] ? new Date(_data["shipmentDeliveryDate"].toString()) : undefined as any;
             this.stopId = _data["stopId"];
             this.orderItemId = _data["orderItemId"];
             this.productId = _data["productId"];
             this.productName = _data["productName"];
             this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.goodName = _data["goodName"];
             this.customExtraItemId = _data["customExtraItemId"];
             this.orderReturnId = _data["orderReturnId"];
             this.lineName = _data["lineName"];
@@ -22668,11 +22708,14 @@ export class ClientLedgerEntryDto implements IClientLedgerEntryDto {
         data["target"] = this.target;
         data["orderId"] = this.orderId;
         data["orderRequiredDeliveryDate"] = this.orderRequiredDeliveryDate ? formatDate(this.orderRequiredDeliveryDate) : undefined as any;
+        data["shipmentDeliveryDate"] = this.shipmentDeliveryDate ? this.shipmentDeliveryDate.toISOString() : undefined as any;
         data["stopId"] = this.stopId;
         data["orderItemId"] = this.orderItemId;
         data["productId"] = this.productId;
         data["productName"] = this.productName;
         data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["goodName"] = this.goodName;
         data["customExtraItemId"] = this.customExtraItemId;
         data["orderReturnId"] = this.orderReturnId;
         data["lineName"] = this.lineName;
@@ -22698,11 +22741,14 @@ export interface IClientLedgerEntryDto {
     target?: ClientLedgerEntryTarget;
     orderId?: string | undefined;
     orderRequiredDeliveryDate?: Date | undefined;
+    shipmentDeliveryDate?: Date | undefined;
     stopId?: string | undefined;
     orderItemId?: string | undefined;
     productId?: string | undefined;
     productName?: string | undefined;
     supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    goodName?: string | undefined;
     customExtraItemId?: string | undefined;
     orderReturnId?: string | undefined;
     lineName?: string | undefined;
@@ -23219,6 +23265,7 @@ export class ClientLedgerRowDto implements IClientLedgerRowDto {
     orderItemId?: string | undefined;
     productId?: string | undefined;
     supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
     customExtraItemId?: string | undefined;
     orderReturnId?: string | undefined;
     lineName?: string | undefined;
@@ -23244,6 +23291,7 @@ export class ClientLedgerRowDto implements IClientLedgerRowDto {
             this.orderItemId = _data["orderItemId"];
             this.productId = _data["productId"];
             this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.supplierGoodId = _data["supplierGoodId"];
             this.customExtraItemId = _data["customExtraItemId"];
             this.orderReturnId = _data["orderReturnId"];
             this.lineName = _data["lineName"];
@@ -23269,6 +23317,7 @@ export class ClientLedgerRowDto implements IClientLedgerRowDto {
         data["orderItemId"] = this.orderItemId;
         data["productId"] = this.productId;
         data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["supplierGoodId"] = this.supplierGoodId;
         data["customExtraItemId"] = this.customExtraItemId;
         data["orderReturnId"] = this.orderReturnId;
         data["lineName"] = this.lineName;
@@ -23287,6 +23336,7 @@ export interface IClientLedgerRowDto {
     orderItemId?: string | undefined;
     productId?: string | undefined;
     supplierGoodItemId?: string | undefined;
+    supplierGoodId?: string | undefined;
     customExtraItemId?: string | undefined;
     orderReturnId?: string | undefined;
     lineName?: string | undefined;

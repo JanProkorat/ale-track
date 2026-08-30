@@ -266,6 +266,15 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
                   } satisfies DetailBackState,
                 })
                 : undefined}
+              // Same detour, same way back: the client's arrow returns to this order.
+              onOpenClient={canSee('clients')
+                ? (clientId) => navigate(`${PATHS.clients}/${clientId}`, {
+                  state: {
+                    backTo: `${PATHS.orders}/${id}`,
+                    backLabel: 'Zpět na objednávku',
+                  } satisfies DetailBackState,
+                })
+                : undefined}
             />
           )}
         </QueryBoundary>

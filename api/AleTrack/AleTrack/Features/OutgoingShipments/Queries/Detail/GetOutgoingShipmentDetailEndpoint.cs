@@ -212,6 +212,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                                     BreweryName = oi.Product.Brewery.Name,
                                     BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder,
                                     OrderItemId = oi.PublicId,
+                                    LineKind = oi.LineKind,
                                     Note = oi.Note,
                                     QuantityFromInventory = oi.QuantityFromInventory,
                                     InventoryItemId = oi.InventoryItem != null ? oi.InventoryItem.PublicId : null,
@@ -317,6 +318,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                             ClientId = s.ClientOrder!.Client.PublicId,
                             ClientName = s.ClientOrder!.Client.Name,
                             OrderId = s.ClientOrder!.PublicId,
+                            LineKind = i.LineKind,
                             Note = i.Note
                         }))
                     .OrderBy(g => g.PickupSource)

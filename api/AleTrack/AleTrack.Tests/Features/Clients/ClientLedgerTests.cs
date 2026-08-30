@@ -424,6 +424,62 @@ public sealed class ClientLedgerTests
     }
 
     /// <summary>
+    /// A good handed over at the door, the mirror of the product above: the good identifies it,
+    /// because there is no order line and a free-text name would lose the supplier's price list.
+    /// </summary>
+    [Fact]
+    public async Task Save_SupplierGoodTakenAtTheDoor_IsRecordedAgainstTheGood()
+    {
+        var f = BuildFixture();
+        var good = SupplierBuilder.BuildGood(id: 91, name: "CO₂ láhev");
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [f.Client],
+            products: [f.Product],
+            orders: [f.Order],
+            supplierGoods: [good]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var added = new List<ClientLedgerEntry>();
+        db.Setup(x => x.ClientLedgerEntries.Add(It.IsAny<ClientLedgerEntry>()))
+            .Callback<ClientLedgerEntry>(added.Add);
+
+        var h = new Harness(db, added, []);
+
+        await SaveAsync(h, f, new ClientLedgerRowDto
+        {
+            Target = ClientLedgerEntryTarget.SupplierGoodQuantity,
+            SupplierGoodId = good.PublicId,
+            PlannedQuantity = 0,
+            ActualQuantity = 2
+        });
+
+        var entry = added.Should().ContainSingle().Subject;
+        entry.SupplierGoodItemId.Should().BeNull("nothing on the order planned it");
+        entry.SupplierGoodId.Should().Be(91);
+        entry.GoodName.Should().Be("CO₂ láhev");
+        entry.PlannedQuantity.Should().Be(0);
+        entry.ActualQuantity.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Save_UnknownSupplierGood_NotFound()
+    {
+        var f = BuildFixture();
+        var h = BuildHarness(f);
+
+        var act = () => SaveAsync(h, f, new ClientLedgerRowDto
+        {
+            Target = ClientLedgerEntryTarget.SupplierGoodQuantity,
+            SupplierGoodId = Guid.NewGuid(),
+            PlannedQuantity = 0,
+            ActualQuantity = 2
+        });
+
+        await act.Should().ThrowAsync<Exception>();
+    }
+
+    /// <summary>
     /// The ledger is a record beside the order, so recording against a delivered one is normal —
     /// that is when deviations are known. Nothing here may touch the frozen-content guarantee.
     /// </summary>
@@ -652,5 +708,177 @@ public sealed class ClientLedgerTests
             CancellationToken.None);
 
         endpoint.Response.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Reported: a deviation on a vratka or an extra the order already had read as "Změna" — the
+    /// operator could not tell which line it was about. Such a row stores only the line's id; the
+    /// name is derived on read.
+    /// </summary>
+    [Fact]
+    public async Task Get_DeviationOnAReturnLine_IsNamedAfterThatLine()
+    {
+        var f = BuildFixture();
+
+        var entry = StoredProductEntry(f, planned: 5, actual: 4);
+        entry.Target = ClientLedgerEntryTarget.ReturnQuantity;
+        entry.OrderItemId = null;
+        entry.ProductId = null;
+        entry.ProductName = null;
+        entry.OrderReturnId = ReturnRowId;
+        entry.OrderReturn = f.Return;
+        entry.Client = f.Client;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [f.Client], clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetClientLedgerEntriesRequest { Id = f.Client.PublicId }, CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle().Which.LineName.Should().Be("Sudy 50 l");
+    }
+
+    [Fact]
+    public async Task Get_DeviationOnACustomExtraLine_IsNamedAfterThatLine()
+    {
+        var f = BuildFixture();
+        var extra = new OrderCustomExtraItem
+        {
+            Id = 81, PublicId = Guid.NewGuid(), Description = "Tácky", Quantity = 7
+        };
+
+        var entry = StoredProductEntry(f, planned: 7, actual: 6);
+        entry.Target = ClientLedgerEntryTarget.CustomExtraQuantity;
+        entry.OrderItemId = null;
+        entry.ProductId = null;
+        entry.ProductName = null;
+        entry.CustomExtraItemId = extra.Id;
+        entry.CustomExtraItem = extra;
+        entry.Client = f.Client;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [f.Client], clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetClientLedgerEntriesRequest { Id = f.Client.PublicId }, CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle().Which.LineName.Should().Be("Tácky");
+    }
+
+    [Fact]
+    public async Task Get_DeviationOnASupplierGoodLine_IsNamedAfterThatGood()
+    {
+        var f = BuildFixture();
+        var good = SupplierBuilder.BuildGood(id: 91, name: "Biogon");
+        var goodItem = new OrderSupplierGoodItem
+        {
+            Id = 92, PublicId = Guid.NewGuid(), SupplierGood = good, SupplierGoodId = good.Id, Quantity = 2
+        };
+
+        var entry = StoredProductEntry(f, planned: 2, actual: 1);
+        entry.Target = ClientLedgerEntryTarget.SupplierGoodQuantity;
+        entry.OrderItemId = null;
+        entry.ProductId = null;
+        entry.ProductName = null;
+        entry.SupplierGoodItemId = goodItem.Id;
+        entry.SupplierGoodItem = goodItem;
+        entry.Client = f.Client;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [f.Client], clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetClientLedgerEntriesRequest { Id = f.Client.PublicId }, CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle().Which.GoodName.Should().Be("Biogon");
+    }
+
+    /// <summary>
+    /// The stored name still wins: something handed over with no line at all is named on the entry
+    /// itself, and that name has to survive the line it never had.
+    /// </summary>
+    [Fact]
+    public async Task Get_FreeTextLineName_IsKeptAsWritten()
+    {
+        var f = BuildFixture();
+
+        var entry = StoredProductEntry(f, planned: 0, actual: 4);
+        entry.Target = ClientLedgerEntryTarget.ReturnQuantity;
+        entry.OrderItemId = null;
+        entry.ProductId = null;
+        entry.ProductName = null;
+        entry.LineName = "Basy prázdných";
+        entry.OrderReturnId = ReturnRowId;
+        entry.OrderReturn = f.Return;
+        entry.Client = f.Client;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [f.Client], clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetClientLedgerEntriesRequest { Id = f.Client.PublicId }, CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle().Which.LineName.Should().Be("Basy prázdných");
+    }
+
+    /// <summary>
+    /// The client profile groups the ledger by order and dates each group from the run carrying
+    /// it, so the read has to carry that date rather than only the order's promised one.
+    /// </summary>
+    [Fact]
+    public async Task Get_OrderOnAShipment_CarriesThatRunsDeliveryDate()
+    {
+        var deliveryDate = new DateTime(2026, 8, 26, 6, 30, 0, DateTimeKind.Utc);
+        var f = BuildFixture();
+        f.Order.OutgoingShipmentStop = new OutgoingShipmentStop
+        {
+            Id = 71,
+            PublicId = Guid.NewGuid(),
+            Kind = OutgoingShipmentStopKind.Order,
+            Order = 1,
+            OutgoingShipment = OutgoingShipmentBuilder.BuildEntity(deliveryDate: deliveryDate)
+        };
+
+        var entry = StoredProductEntry(f, planned: 10, actual: 7);
+        entry.Client = f.Client;
+        entry.Order = f.Order;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [f.Client],
+            clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new GetClientLedgerEntriesRequest { Id = f.Client.PublicId },
+            CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle()
+            .Which.ShipmentDeliveryDate.Should().Be(deliveryDate);
+    }
+
+    [Fact]
+    public async Task Get_OrderOnNoShipment_HasNoDeliveryDate()
+    {
+        var f = BuildFixture();
+
+        var entry = StoredProductEntry(f, planned: 10, actual: 7);
+        entry.Client = f.Client;
+        entry.Order = f.Order;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [f.Client],
+            clientLedgerEntries: [entry]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientLedgerEntriesRequest, List<ClientLedgerEntryDto>, GetClientLedgerEntriesEndpoint>
+            .Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new GetClientLedgerEntriesRequest { Id = f.Client.PublicId },
+            CancellationToken.None);
+
+        endpoint.Response.Should().ContainSingle()
+            .Which.ShipmentDeliveryDate.Should().BeNull();
     }
 }

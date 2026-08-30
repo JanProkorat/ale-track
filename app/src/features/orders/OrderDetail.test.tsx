@@ -52,6 +52,11 @@ vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => historySt
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
 }));
+// The recording drawer's second catalog: the suppliers' price lists.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliers: () => ({ data: [], isLoading: false, isError: false }),
+  useSuppliersMany: () => ({ bySupplier: new Map() }),
+}));
 
 function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledgerState> = {}) {
   ledgerState.data = entries;
@@ -103,7 +108,12 @@ function shipment(over: Partial<OrderOutgoingShipmentDto> = {}): OrderOutgoingSh
   });
 }
 
-function renderDetail(o: OrderDto, backLabel?: string, onOpenShipment?: (id: string) => void) {
+function renderDetail(
+  o: OrderDto,
+  backLabel?: string,
+  onOpenShipment?: (id: string) => void,
+  onOpenClient?: (id: string) => void,
+) {
   return render(
     <MuiThemeProvider theme={theme}>
       <OrderDetail
@@ -114,10 +124,58 @@ function renderDetail(o: OrderDto, backLabel?: string, onOpenShipment?: (id: str
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onOpenShipment={onOpenShipment}
+        onOpenClient={onOpenClient}
       />
     </MuiThemeProvider>,
   );
 }
+
+describe('OrderDetail — the client in the header', () => {
+  const withBusiness = () => order({
+    client: new ClientInfoDto({
+      id: 'client-a',
+      name: 'Drak Zittau',
+      businessName: 'DLR Gastro Event UG',
+    }),
+  });
+
+  it('names the client both ways: the door and the company invoiced', () => {
+    renderDetail(withBusiness());
+
+    const head = within(screen.getByTestId('detail-header'));
+    expect(head.getByText('Drak Zittau')).toBeInTheDocument();
+    expect(head.getByText('DLR Gastro Event UG')).toBeInTheDocument();
+  });
+
+  it('opens the client from either name', () => {
+    const onOpenClient = vi.fn();
+    renderDetail(withBusiness(), undefined, undefined, onOpenClient);
+
+    const head = within(screen.getByTestId('detail-header'));
+    fireEvent.click(head.getByRole('button', { name: 'Drak Zittau' }));
+    fireEvent.click(head.getByRole('button', { name: 'DLR Gastro Event UG' }));
+
+    expect(onOpenClient).toHaveBeenCalledTimes(2);
+    expect(onOpenClient).toHaveBeenCalledWith('client-a');
+  });
+
+  // A user without Klienti has nothing to open, so the name is text rather than a dead control.
+  it('leaves the names unclickable when no client screen is reachable', () => {
+    renderDetail(withBusiness());
+
+    const head = within(screen.getByTestId('detail-header'));
+    expect(head.queryByRole('button', { name: 'Drak Zittau' })).not.toBeInTheDocument();
+    expect(head.getByText('Drak Zittau')).toBeInTheDocument();
+  });
+
+  it('says nothing where the client has no business name', () => {
+    renderDetail(order());
+
+    const head = within(screen.getByTestId('detail-header'));
+    expect(head.getByText('Zitavsky klient')).toBeInTheDocument();
+    expect(head.queryByText('DLR Gastro Event UG')).not.toBeInTheDocument();
+  });
+});
 
 describe('OrderDetail — the back arrow', () => {
   it('goes back to the orders list by default', () => {
@@ -667,9 +725,31 @@ describe('OrderDetail — deviations', () => {
     }));
 
     const card = within(itemsCard());
-    expect(card.getByText('Celkem')).toBeInTheDocument();
+    // Twice: the column head and the footer beneath it.
+    expect(card.getAllByText('Celkem')).toHaveLength(2);
     expect(card.getByText('1000 Kč')).toBeInTheDocument();
     expect(card.getAllByText('700 Kč').length).toBeGreaterThan(0);
+  });
+
+  // The numbers are four unlabelled columns without it; the prototype's table has a head.
+  it('names the item columns above the rows', () => {
+    renderDetail(order({
+      orderItems: [new OrderItemDto({
+        id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Ležák', quantity: 10, unitPriceWithVat: 100,
+      })],
+    }));
+
+    const card = within(itemsCard());
+    expect(card.getByText('Produkt')).toBeInTheDocument();
+    expect(card.getByText('Množství')).toBeInTheDocument();
+    expect(card.getByText('Cena/ks')).toBeInTheDocument();
+  });
+
+  it('leaves the head off an order with no items at all', () => {
+    renderDetail(order({ orderItems: [] }));
+
+    expect(within(itemsCard()).queryByText('Produkt')).not.toBeInTheDocument();
+    expect(within(itemsCard()).getByText('Objednávka nemá žádné položky.')).toBeInTheDocument();
   });
 
   it('shows one total when nothing deviated', () => {
@@ -704,7 +784,7 @@ describe('OrderDetail — deviations', () => {
     renderDetail(order());
 
     const card = within(screen.getByText('Peníze a poznámky').closest('.MuiCard-root') as HTMLElement);
-    expect(card.getByText('Klient dluží')).toBeInTheDocument();
+    expect(card.getByText('Neměl na zaplacení')).toBeInTheDocument();
     expect(card.getByText('2400 Kč')).toBeInTheDocument();
   });
 

@@ -119,6 +119,9 @@ public sealed record ClientInfoDto
     /// Name of the client
     /// </summary>
     public string Name { get; set; } = null!;
+
+    /// <summary>Who the order is invoiced to, where that differs from the name on the door.</summary>
+    public string? BusinessName { get; set; }
 }
 
 
@@ -163,6 +166,11 @@ public sealed record OrderItemDto
     /// recorded the ceník price of the day, and today's beside a frozen one would mislead.
     /// </summary>
     public decimal? ListPriceWithVat { get; set; }
+
+    /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
 
     /// <summary>
     /// State of the reminder for this item.

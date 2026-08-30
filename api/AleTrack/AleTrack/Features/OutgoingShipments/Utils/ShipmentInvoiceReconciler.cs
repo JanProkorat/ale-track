@@ -58,6 +58,12 @@ public sealed record ReconcileResult
     /// <summary>Lines detached from their invoice; the caller deletes them.</summary>
     public IReadOnlyList<OutgoingShipmentInvoiceLine> RemovedLines { get; init; } = [];
 
+    /// <summary>
+    /// Private lines opened for order lines marked <see cref="OrderLineKind.Private"/>; the caller
+    /// adds them. They hang off no navigation EF walks, so nothing else would persist them.
+    /// </summary>
+    public IReadOnlyList<OutgoingShipmentInvoiceLine> AddedPrivateLines { get; init; } = [];
+
     /// <summary>Billing recipients detached from their invoice; the caller deletes them.</summary>
     public IReadOnlyList<OutgoingShipmentInvoiceBillingRecipient> RemovedRecipients { get; init; } = [];
 }
@@ -92,6 +98,14 @@ public static class ShipmentInvoiceReconciler
         public required long PayingClientId { get; init; }
 
         public required int Quantity { get; init; }
+
+        /// <summary>
+        /// What the order says this line is for. <see cref="OrderLineKind.Private"/> is the only
+        /// value that changes reconciliation: its pieces default to a private line instead of an
+        /// invoice. A <see cref="OrderLineKind.BillOnly"/> line is billed like any other — being
+        /// absent from the truck is the nakládka's business, not the invoice's.
+        /// </summary>
+        public OrderLineKind LineKind { get; init; } = OrderLineKind.Normal;
 
         /// <summary>
         /// What a line billing this source records: its name and, for an order item, the product
@@ -164,6 +178,7 @@ public static class ShipmentInvoiceReconciler
         var removedInvoices = new List<OutgoingShipmentInvoice>();
         var removedLines = new List<OutgoingShipmentInvoiceLine>();
         var removedRecipients = new List<OutgoingShipmentInvoiceBillingRecipient>();
+        var addedPrivateLines = new List<OutgoingShipmentInvoiceLine>();
 
         var sources = CollectSources(split);
         var sourceKeys = sources.Select(s => s.Key).ToHashSet();
@@ -255,7 +270,31 @@ public static class ShipmentInvoiceReconciler
                     if (assigned > 0)
                         adjustments.Add(Adjustment(InvoiceAdjustmentKind.QuantityAdded, source, diff));
 
-                    // Surplus is always billed. Pieces become private only when the user says so.
+                    // Pieces the order marks private start off every invoice: that is what
+                    // OrderLineKind.Private means — the money was settled elsewhere. It is a
+                    // default, not a lock; the user can still move them onto an invoice.
+                    if (source.LineKind == OrderLineKind.Private)
+                    {
+                        var existingPrivate = privateLines.FirstOrDefault(l => KeyOf(l) == source.Key);
+                        if (existingPrivate is not null)
+                        {
+                            existingPrivate.Quantity += diff;
+                        }
+                        else
+                        {
+                            var privateLine = BuildLine(shipment, source, diff);
+                            privateLine.IsPrivate = true;
+                            privateLines.Add(privateLine);
+                            // A private line hangs off no navigation EF walks, so the caller has
+                            // to add it explicitly — hence it is reported rather than saved here.
+                            addedPrivateLines.Add(privateLine);
+                        }
+
+                        break;
+                    }
+
+                    // Otherwise surplus is always billed. Pieces become private only when the
+                    // order says so, or when the user moves them.
                     var home = HomeInvoiceFor(shipment, source);
                     var existing = home.Lines.FirstOrDefault(l => KeyOf(l) == source.Key);
                     if (existing is not null)
@@ -342,7 +381,8 @@ public static class ShipmentInvoiceReconciler
             Adjustments = adjustments,
             RemovedInvoices = removedInvoices,
             RemovedLines = removedLines,
-            RemovedRecipients = removedRecipients
+            RemovedRecipients = removedRecipients,
+            AddedPrivateLines = addedPrivateLines
         };
     }
 
@@ -381,6 +421,7 @@ public static class ShipmentInvoiceReconciler
                     PayingClientId = payer.Id,
                     PayingClient = payer.Entity,
                     Quantity = item.Quantity,
+                    LineKind = item.LineKind,
                     Snapshot = SnapshotFor(shipment, stop, item)
                 });
             }
@@ -402,6 +443,7 @@ public static class ShipmentInvoiceReconciler
                 PayingClientId = payer.Id,
                 PayingClient = payer.Entity,
                 Quantity = item.Quantity,
+                LineKind = item.LineKind,
                 Snapshot = SupplierGoodSnapshot(item)
             });
         }

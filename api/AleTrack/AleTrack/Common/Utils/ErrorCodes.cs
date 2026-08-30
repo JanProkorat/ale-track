@@ -80,6 +80,11 @@ public static class ErrorCodes
     /// Error code for case when an outgoing shipment cannot be marked as loaded without any stops
     /// </summary>
     public const string ShipmentCannotBeLoadedWithoutStops = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment cannot be marked as loaded with no vehicle
+    /// </summary>
+    public const string ShipmentCannotBeLoadedWithoutVehicle = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_VEHICLE";
     
     /// <summary>
     /// Error code for case when an outgoing shipment is already delivered

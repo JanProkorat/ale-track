@@ -6,7 +6,18 @@ import {
   deviationText,
   doorSideAdditions,
   entryLineKey,
+  billablePieces,
+  doorSideGoods,
+  entryDeviation,
+  entryDisplayName,
   entryTooltip,
+  groupByOrder,
+  isBillable,
+  isExtraSettleable,
+  isGoodSettleable,
+  isReturnSettleable,
+  ledgerNoteText,
+  ledgerTodo,
   isAssigned,
   moneySummary,
   openEntries,
@@ -27,6 +38,7 @@ function entry(over: Partial<ClientLedgerEntryDto> = {}): ClientLedgerEntryDto {
 const ITEM_A = '11111111-1111-1111-1111-111111111111';
 const ITEM_B = '22222222-2222-2222-2222-222222222222';
 const PRODUCT = '33333333-3333-3333-3333-333333333333';
+const ORDER_CARRYING = '99999999-9999-9999-9999-999999999999';
 
 function plan(...rows: Array<[string, string, number]>): PlanRow[] {
   return rows.map(([key, name, quantity]) => ({ key, name, quantity }));
@@ -311,5 +323,332 @@ describe('entryTooltip', () => {
 
   it('is undefined without an entry', () => {
     expect(entryTooltip(undefined)).toBeUndefined();
+  });
+});
+
+describe('groupByOrder', () => {
+  const ORDER_A = '44444444-4444-4444-4444-444444444444';
+  const ORDER_B = '55555555-5555-5555-5555-555555555555';
+
+  it('puts the entries of one order together, newest first inside the group', () => {
+    const groups = groupByOrder([
+      entry({ orderId: ORDER_A, note: 'starsi', createdAt: new Date('2026-08-24T10:00:00Z') }),
+      entry({ orderId: ORDER_B, note: 'jina objednavka', createdAt: new Date('2026-08-23T10:00:00Z') }),
+      entry({ orderId: ORDER_A, note: 'novejsi', createdAt: new Date('2026-08-25T10:00:00Z') }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0].orderId).toBe(ORDER_A);
+    expect(groups[0].entries.map((e) => e.note)).toEqual(['novejsi', 'starsi']);
+  });
+
+  // Groups follow the same newest-first rule the rows keep among themselves.
+  it('leads with the order whose newest entry is newest', () => {
+    const groups = groupByOrder([
+      entry({ orderId: ORDER_A, createdAt: new Date('2026-08-20T10:00:00Z') }),
+      entry({ orderId: ORDER_B, createdAt: new Date('2026-08-26T10:00:00Z') }),
+    ]);
+
+    expect(groups.map((g) => g.orderId)).toEqual([ORDER_B, ORDER_A]);
+  });
+
+  // A standalone debt has no order to group under, and sorts by date with everything else.
+  it('collects the entries with no order into one group of their own', () => {
+    const groups = groupByOrder([
+      entry({ orderId: ORDER_A, createdAt: new Date('2026-08-26T10:00:00Z') }),
+      entry({ target: ClientLedgerEntryTarget.Money, amount: 500, createdAt: new Date('2026-08-27T10:00:00Z') }),
+      entry({ target: ClientLedgerEntryTarget.Money, amount: 200, createdAt: new Date('2026-08-25T10:00:00Z') }),
+    ]);
+
+    expect(groups.map((g) => g.orderId)).toEqual([undefined, ORDER_A]);
+    expect(groups[0].entries).toHaveLength(2);
+  });
+
+  it('is empty for an empty ledger', () => {
+    expect(groupByOrder([])).toEqual([]);
+  });
+
+  it('dates the group from the run carrying the order', () => {
+    const deliveryDate = new Date('2026-08-26T06:30:00Z');
+    const groups = groupByOrder([
+      entry({ orderId: ORDER_A, createdAt: new Date('2026-08-25T10:00:00Z') }),
+      entry({ orderId: ORDER_A, shipmentDeliveryDate: deliveryDate, createdAt: new Date('2026-08-24T10:00:00Z') }),
+    ]);
+
+    expect(groups[0].shipmentDeliveryDate).toEqual(deliveryDate);
+  });
+
+  it('leaves the date off a group no shipment carries', () => {
+    expect(groupByOrder([entry({ orderId: ORDER_A })])[0].shipmentDeliveryDate).toBeUndefined();
+  });
+});
+
+describe('ledgerTodo', () => {
+  const money = (v: number) => `${v} Kč`;
+
+  it('sends a short delivery to the cart', () => {
+    const todo = ledgerTodo(entry({ productId: PRODUCT, plannedQuantity: 10, actualQuantity: 7 }), money);
+
+    expect(todo).toEqual({ text: 'dovézt 3 ks', action: 'order' });
+  });
+
+  // The pieces are already with the client, so what is left is money — which the next order can
+  // carry as a bill-only line, billed and never loaded.
+  it('turns an over-delivery into something to bill', () => {
+    const todo = ledgerTodo(entry({ productId: PRODUCT, plannedQuantity: 3, actualQuantity: 4 }), money);
+
+    expect(todo).toEqual({ text: 'doúčtovat 1 ks', action: 'bill' });
+  });
+
+  // Nothing to price means nothing an order can bill for it.
+  it('offers no billing action without a product or a good', () => {
+    const todo = ledgerTodo(entry({ lineName: 'Něco', plannedQuantity: 3, actualQuantity: 4 }), money);
+
+    expect(todo).toEqual({ text: 'doúčtovat 1 ks', action: 'none' });
+  });
+
+  // A supplier good or a custom extra has no product the cart can price.
+  it('states the shortfall but offers no cart action without a product', () => {
+    const todo = ledgerTodo(entry({ plannedQuantity: 5, actualQuantity: 2 }), money);
+
+    expect(todo).toEqual({ text: 'dovézt 3 ks', action: 'none' });
+  });
+
+  it('sends unreturned empties to the vratky', () => {
+    const todo = ledgerTodo(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      lineName: 'Basy',
+      plannedQuantity: 5,
+      actualQuantity: 4,
+    }), money);
+
+    expect(todo).toEqual({ text: 'vyzvednout 1 ks obalů', action: 'returns' });
+  });
+
+  // Empties run the other way from goods: too many back and we are holding their deposit.
+  it('reads extra empties as a deposit to give back', () => {
+    const todo = ledgerTodo(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      lineName: 'Basy',
+      plannedQuantity: 0,
+      actualQuantity: 2,
+    }), money);
+
+    expect(todo).toEqual({ text: 'vrátit zálohu za 2 ks', action: 'none' });
+  });
+
+  it('reads money in both directions', () => {
+    expect(ledgerTodo(entry({ target: ClientLedgerEntryTarget.Money, amount: 100 }), money))
+      .toEqual({ text: 'vybrat 100 Kč', action: 'none' });
+    expect(ledgerTodo(entry({ target: ClientLedgerEntryTarget.Money, amount: -100 }), money))
+      .toEqual({ text: 'vrátit 100 Kč', action: 'none' });
+  });
+
+  it('falls back to acknowledging a note', () => {
+    expect(ledgerTodo(entry({ target: ClientLedgerEntryTarget.Other, note: 'řidič nechal paletu' }), money))
+      .toEqual({ text: 'vzít na vědomí', action: 'none' });
+  });
+});
+
+describe('entryDeviation', () => {
+  it('words a shortfall of goods', () => {
+    expect(entryDeviation(entry({ plannedQuantity: 10, actualQuantity: 7 }))).toBe('Nevyloženo 3 ks');
+  });
+
+  // The same numbers on empties mean the opposite thing.
+  it('words a shortfall of empties as unreturned', () => {
+    expect(entryDeviation(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      plannedQuantity: 5,
+      actualQuantity: 4,
+    }))).toBe('Nevráceno 1 ks');
+  });
+
+  it('is undefined for money, which has no line', () => {
+    expect(entryDeviation(entry({ target: ClientLedgerEntryTarget.Money, amount: 100 }))).toBeUndefined();
+  });
+});
+
+describe('isReturnSettleable', () => {
+  it('accepts empties the client kept', () => {
+    expect(isReturnSettleable(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      plannedQuantity: 5,
+      actualQuantity: 4,
+    }))).toBe(true);
+  });
+
+  it('rejects empties handed back in excess', () => {
+    expect(isReturnSettleable(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      plannedQuantity: 0,
+      actualQuantity: 2,
+    }))).toBe(false);
+  });
+
+  it('rejects one another order is already collecting', () => {
+    expect(isReturnSettleable(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      plannedQuantity: 5,
+      actualQuantity: 4,
+      resolvedByOrderId: '66666666-6666-6666-6666-666666666666',
+    }))).toBe(false);
+  });
+
+  it('rejects a product shortfall, which belongs in the cart', () => {
+    expect(isReturnSettleable(entry({ productId: PRODUCT, plannedQuantity: 10, actualQuantity: 7 }))).toBe(false);
+  });
+});
+
+describe('supplier goods on the ledger', () => {
+  const GOOD = '77777777-7777-7777-7777-777777777777';
+
+  const goodEntry = (over: Partial<ClientLedgerEntryDto> = {}) => entry({
+    target: ClientLedgerEntryTarget.SupplierGoodQuantity,
+    supplierGoodId: GOOD,
+    goodName: 'CO₂ láhev',
+    plannedQuantity: 3,
+    actualQuantity: 1,
+    ...over,
+  });
+
+  // The gap this closes: a good could only be pinned to an order line, so one handed over
+  // unplanned had nowhere to go and the drawer offered brewery products only.
+  it('sends a good that is still owed to the order own goods lines', () => {
+    const todo = ledgerTodo(goodEntry(), (v) => `${v} Kč`);
+
+    expect(todo).toEqual({ text: 'dovézt 2 ks', action: 'goods' });
+    expect(isGoodSettleable(goodEntry())).toBe(true);
+  });
+
+  it('offers no goods action without a good behind it', () => {
+    expect(isGoodSettleable(goodEntry({ supplierGoodId: undefined }))).toBe(false);
+  });
+
+  it('offers no goods action on one another order is already bringing', () => {
+    expect(isGoodSettleable(goodEntry({ resolvedByOrderId: ORDER_CARRYING }))).toBe(false);
+  });
+
+  it('names the row from the good, which is the only name it has', () => {
+    expect(entryDisplayName(goodEntry())).toBe('CO₂ láhev');
+  });
+
+  it('keys a good with no order line by the good', () => {
+    expect(entryLineKey(goodEntry())).toBe(`good:${GOOD}`);
+  });
+
+  it('collects the goods taken at the door', () => {
+    const taken = goodEntry({ plannedQuantity: 0, actualQuantity: 2 });
+
+    expect(doorSideGoods([taken, entry({ productId: PRODUCT })])).toEqual([taken]);
+  });
+
+  it('leaves out a good the order planned, which is an over-delivery on its own line', () => {
+    const planned = goodEntry({ supplierGoodItemId: '88888888-8888-8888-8888-888888888888' });
+
+    expect(doorSideGoods([planned])).toHaveLength(0);
+  });
+});
+
+describe('billing what the client already took', () => {
+  const GOOD = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  it('counts the pieces the client has beyond the plan', () => {
+    expect(billablePieces(entry({ plannedQuantity: 3, actualQuantity: 4 }))).toBe(1);
+  });
+
+  it('is zero when the client had less than planned, which is a delivery instead', () => {
+    expect(billablePieces(entry({ plannedQuantity: 10, actualQuantity: 7 }))).toBe(0);
+  });
+
+  it('accepts a product taken beyond the plan', () => {
+    expect(isBillable(entry({ productId: PRODUCT, plannedQuantity: 0, actualQuantity: 1 }))).toBe(true);
+  });
+
+  it('accepts a supplier good taken beyond the plan', () => {
+    expect(isBillable(entry({
+      target: ClientLedgerEntryTarget.SupplierGoodQuantity,
+      supplierGoodId: GOOD,
+      plannedQuantity: 0,
+      actualQuantity: 2,
+    }))).toBe(true);
+  });
+
+  // Empties handed back in excess are a deposit to return, not something to bill.
+  it('rejects an over-return', () => {
+    expect(isBillable(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      lineName: 'Basy',
+      plannedQuantity: 0,
+      actualQuantity: 2,
+    }))).toBe(false);
+  });
+
+  it('rejects one an order is already carrying', () => {
+    expect(isBillable(entry({
+      productId: PRODUCT,
+      plannedQuantity: 0,
+      actualQuantity: 1,
+      resolvedByOrderId: ORDER_CARRYING,
+    }))).toBe(false);
+  });
+
+  it('rejects money, which has no pieces at all', () => {
+    expect(isBillable(entry({ target: ClientLedgerEntryTarget.Money, amount: 100 }))).toBe(false);
+  });
+});
+
+describe('ledgerNoteText', () => {
+  const money = (v: number) => `${v} Kč`;
+
+  // A note is read as a sentence, so it starts like one.
+  it('writes money to collect as a sentence', () => {
+    expect(ledgerNoteText(entry({ target: ClientLedgerEntryTarget.Money, amount: 100 }), money))
+      .toBe('Vybrat 100 Kč');
+  });
+
+  it('names the line a deposit belongs to', () => {
+    const text = ledgerNoteText(entry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      lineName: 'Basy prázdných',
+      plannedQuantity: 0,
+      actualQuantity: 2,
+    }), money);
+
+    expect(text).toBe('Vrátit zálohu za 2 ks — Basy prázdných');
+  });
+
+  // Same wording as the card's instruction, so the two cannot drift apart.
+  it('reuses the instruction the card shows', () => {
+    const e = entry({ target: ClientLedgerEntryTarget.Money, amount: -250 });
+
+    expect(ledgerNoteText(e, money).toLowerCase())
+      .toContain(ledgerTodo(e, money).text.toLowerCase());
+  });
+});
+
+describe('a shortfall on a custom extra', () => {
+  const extra = (over: Partial<ClientLedgerEntryDto> = {}) => entry({
+    target: ClientLedgerEntryTarget.CustomExtraQuantity,
+    lineName: 'Tácky',
+    plannedQuantity: 7,
+    actualQuantity: 6,
+    ...over,
+  });
+
+  // The order has a list for these, so it carries another row of it rather than a remark.
+  it('goes on the order Položky navíc', () => {
+    expect(ledgerTodo(extra(), (v) => `${v} Kč`))
+      .toEqual({ text: 'dovézt 1 ks', action: 'extras' });
+    expect(isExtraSettleable(extra())).toBe(true);
+  });
+
+  it('is not settleable once an order carries it', () => {
+    expect(isExtraSettleable(extra({ resolvedByOrderId: ORDER_CARRYING }))).toBe(false);
+  });
+
+  // Over-delivered is the other direction and has nothing to do with this list.
+  it('is not a Položky navíc row when the client got more than planned', () => {
+    expect(isExtraSettleable(extra({ plannedQuantity: 0, actualQuantity: 3 }))).toBe(false);
   });
 });

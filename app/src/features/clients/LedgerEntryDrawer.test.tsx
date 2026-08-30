@@ -20,6 +20,12 @@ vi.mock('src/providers/CurrencyProvider', () => ({
 }));
 
 const saveMock = vi.fn();
+
+/** One supplier, one good — the smallest thing the supplier catalog can show. */
+const SUPPLIER_GOOD = { id: 'good-1', name: 'CO₂ láhev', size: '10 kg', prices: [] };
+const SUPPLIER = { id: 'sup-1', name: 'Linde Gas', goods: [SUPPLIER_GOOD] };
+const suppliersState = { data: [SUPPLIER], isLoading: false, isError: false };
+const suppliersById = new Map<string, unknown>([['sup-1', SUPPLIER]]);
 const updateMock = vi.fn();
 const deleteMock = vi.fn();
 
@@ -39,6 +45,11 @@ vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => catalogSt
 // The catalog marks each brewery with its colour; the hook rides on the brewery list.
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
+}));
+// The second catalog: the suppliers' price lists, for a good handed over unplanned.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliers: () => suppliersState,
+  useSuppliersMany: () => ({ bySupplier: suppliersById }),
 }));
 
 /** One brewery, one product, one size — the smallest thing the catalog can show. */
@@ -402,6 +413,31 @@ describe('LedgerEntryDrawer', () => {
         actualQuantity: 1,
       }),
     ]));
+  });
+
+  // The bug this closes: only brewery products could be added, because a good with no order line
+  // had nowhere to be stored. Now the good itself is the key.
+  it('records a supplier good taken at the door against the good, not a line', () => {
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByText('Linde Gas'));
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        target: ClientLedgerEntryTarget.SupplierGoodQuantity,
+        supplierGoodId: 'good-1',
+        plannedQuantity: 0,
+        actualQuantity: 1,
+      }),
+    ]));
+  });
+
+  it('calls the supplier section by its own name', () => {
+    renderDrawer(context());
+
+    expect(screen.getByText('Přidat zboží dodavatele navíc')).toBeInTheDocument();
   });
 
   it('counts up with the catalog\'s own control', () => {

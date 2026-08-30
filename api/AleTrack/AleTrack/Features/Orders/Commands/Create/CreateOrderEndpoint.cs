@@ -80,6 +80,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 Product = relatedProduct!,
                 Quantity = orderItem.Quantity,
                 ReminderState = orderItem.ReminderState,
+                LineKind = orderItem.LineKind,
                 Note = orderItem.Note
             });
         }
@@ -117,6 +118,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 SupplierGood = relatedGood!,
                 Quantity = item.Quantity,
                 Note = item.Note,
+                LineKind = item.LineKind,
                 // The good's standing default; a shipment can move pieces either way later.
                 QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(relatedGood!, item.Quantity)
             });

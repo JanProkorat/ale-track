@@ -38,6 +38,7 @@ const clientDetails: Record<string, { officialAddress?: unknown; contactAddress?
 // every other resource — and the mock can say "nothing open", which is the ordinary case.
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/hooks/useClients', () => ({

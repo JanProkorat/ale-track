@@ -7,7 +7,7 @@ import {
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
   SupplierChargeKind, SupplierGoodPickupSource, DayOfWeek, DeliveryStopKind,
-  ClientLedgerEntryTarget,
+  ClientLedgerEntryTarget, OrderLineKind,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -154,6 +154,12 @@ export const L = {
   addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
   // What a recorded deviation is about. Named by the target — what changed — rather than by
   // the event, because "not unloaded" and "took extra" are one arithmetic with two signs.
+  /** What an order line is for. Normal has no chip: the ordinary case needs no label. */
+  lineKind: {
+    Normal: '',
+    BillOnly: 'Jen fakturace',
+    Private: 'Soukromě',
+  } as Record<string, string>,
   ledgerTarget: {
     ProductQuantity: 'Množství',
     SupplierGoodQuantity: 'Zboží dodavatele',
@@ -483,6 +489,24 @@ export function ledgerTargetName(
   t?: ClientLedgerEntryTarget | string | number,
 ): string | undefined {
   return enumName(ClientLedgerEntryTarget as unknown as Record<string, string | number>, t);
+}
+
+/** The OrderLineKind enum's member name, from either wire representation. */
+export function lineKindName(k?: OrderLineKind | string | number): string {
+  return enumName(OrderLineKind as unknown as Record<string, string | number>, k) ?? 'Normal';
+}
+
+/**
+ * The chip an unusual line carries — "Jen fakturace", "Soukromě". Undefined for an ordinary
+ * line, which needs no chip.
+ */
+export function lineKindLabel(k?: OrderLineKind | string | number): string | undefined {
+  return L.lineKind[lineKindName(k)] || undefined;
+}
+
+/** Whether the line's pieces travel on the run at all. A bill-only line's do not. */
+export function lineTravels(k?: OrderLineKind | string | number): boolean {
+  return lineKindName(k) !== 'BillOnly';
 }
 
 /** Czech label for what a recorded deviation is about. */

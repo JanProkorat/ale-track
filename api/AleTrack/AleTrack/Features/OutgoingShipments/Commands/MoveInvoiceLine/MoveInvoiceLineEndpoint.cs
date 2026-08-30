@@ -231,6 +231,10 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
 
     private void RemoveDetached(ReconcileResult result)
     {
+        // Private lines hang off no navigation EF walks, so they are added explicitly.
+        if (result.AddedPrivateLines.Count > 0)
+            dbContext.OutgoingShipmentInvoiceLines.AddRange(result.AddedPrivateLines);
+
         if (result.RemovedLines.Count > 0)
             dbContext.OutgoingShipmentInvoiceLines.RemoveRange(result.RemovedLines);
 

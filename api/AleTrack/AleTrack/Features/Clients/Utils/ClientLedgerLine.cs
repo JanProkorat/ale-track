@@ -29,6 +29,12 @@ public sealed record ClientLedgerLine
     /// <summary>The affected <see cref="OrderSupplierGoodItem"/>.</summary>
     public long? SupplierGoodItemId { get; init; }
 
+    /// <summary>The affected <see cref="SupplierGood"/>, for a good with no line on the order.</summary>
+    public long? SupplierGoodId { get; init; }
+
+    /// <summary>Good name at the time of writing.</summary>
+    public string? GoodName { get; init; }
+
     /// <summary>The affected <see cref="OrderCustomExtraItem"/>.</summary>
     public long? CustomExtraItemId { get; init; }
 
