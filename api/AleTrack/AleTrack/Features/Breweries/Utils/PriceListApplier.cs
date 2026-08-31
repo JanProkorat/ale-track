@@ -93,12 +93,7 @@ public static class PriceListApplier
         var product = new Product
         {
             PublicId = row.PublicId ?? Guid.NewGuid(),
-            Name = row.Name,
-            Container = row.Container,
-            SaleUnit = row.SaleUnit,
-            Kind = ProductPackaging.DeriveKind(row.Container, row.SaleUnit),
-            PackageSize = row.VolumeLiters,
-            UnitsPerPackage = row.UnitsPerPackage
+            Name = row.Name
         };
 
         Update(product, row, effectiveFrom);
@@ -110,8 +105,21 @@ public static class PriceListApplier
     /// "Svijanský Máz 11%" where the catalogue holds "Svijanský Máz", and letting an import rewrite
     /// that would rename the whole catalogue the first time one ran.
     /// </summary>
+    /// <remarks>
+    /// Packaging is written, not only matched on. A strictly matched product already agrees with
+    /// the row — that packaging is what the key is made of — so these lines only bite on a loose
+    /// match, which is exactly the case where the stored packaging is the thing that is wrong.
+    /// Leaving it as found would put the product back out of the strict key's reach and duplicate
+    /// it on the next import.
+    /// </remarks>
     private static void Update(Product product, PriceListRow row, DateOnly effectiveFrom)
     {
+        product.Container = row.Container;
+        product.SaleUnit = row.SaleUnit;
+        product.UnitsPerPackage = row.UnitsPerPackage;
+        product.PackageSize = row.VolumeLiters;
+        product.Kind = ProductPackaging.DeriveKind(row.Container, row.SaleUnit);
+
         product.Type = row.Type;
         product.AlcoholPercentage = row.AlcoholPercentage;
         product.PlatoDegree = row.PlatoDegree;

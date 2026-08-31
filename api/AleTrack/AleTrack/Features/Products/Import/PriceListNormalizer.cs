@@ -44,6 +44,23 @@ public static partial class PriceListNormalizer
             saleUnit,
             unitsPerPackage);
 
+    /// <summary>
+    /// The same identity with the sale unit and the count left out — what a product still is when
+    /// its recorded packaging turns out to be wrong.
+    /// </summary>
+    /// <remarks>
+    /// The fallback the diff matches on when <see cref="Key"/> misses. The <c>AddProductPackaging</c>
+    /// migration had to guess a legacy row's sale unit and count, and a wrong guess makes the
+    /// strict key unreachable forever: the list's 24-can tray never matches the stored "one can",
+    /// so every import inserts a second copy of the same beer. Name, container and volume are the
+    /// parts of the identity no correction touches, which is why the fallback keeps exactly those.
+    /// </remarks>
+    public static string LooseKey(string name, ProductContainer container, double? volumeLiters) =>
+        string.Join('|',
+            Name(name).ToLowerInvariant(),
+            container,
+            volumeLiters?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty);
+
     [GeneratedRegex(@"\s+")]
     private static partial Regex CollapseWhitespace();
 

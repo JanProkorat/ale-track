@@ -67,6 +67,11 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
                 Name = p.Name,
                 Description = p.Description,
                 Kind = p.Kind,
+                // The packaging trio travels with the row: Kind alone calls both a 12-can and a
+                // 24-can tray "Plechovka 0,5 l", and the catalog then shows one product twice.
+                Container = p.Container,
+                SaleUnit = p.SaleUnit,
+                UnitsPerPackage = p.UnitsPerPackage,
                 AlcoholPercentage = p.AlcoholPercentage,
                 PlatoDegree = p.PlatoDegree,
                 Type = p.Type,

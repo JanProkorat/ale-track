@@ -4,8 +4,7 @@
 // each has its own quantity, note and delete.
 
 import { compareKindThenSize } from 'src/lib/productSort';
-import { fmtLiters } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, packSizeLabel } from 'src/lib/labels';
 import { type InventoryItemListItemDto } from 'src/generated/api-client';
 
 /** An item is "low stock" only when it's linked to a catalog product — free/manual
@@ -14,14 +13,17 @@ export function isLow(item: InventoryItemListItemDto): boolean {
   return Boolean(item.productId) && (item.quantity ?? 0) <= 3;
 }
 
-/** Kind + package size, the line that tells two variants of a product apart.
+/** Kind + pack size, the line that tells two variants of a product apart. The pack size names
+ * its count when a unit holds more than one container, since a 12-can and a 24-can tray of the
+ * same 0,5 l can are otherwise the same line twice.
  *
  * A supplier's goods have neither: no ProductKind, and a size the supplier states as free text
  * ("10 kg", "20 ks") rather than a litre volume. They read by that size instead, so the line is
  * never blank on a row the warehouse actually holds. */
 export function itemSubtitle(item: InventoryItemListItemDto): string {
   if (item.supplierGoodId) return item.size ?? '';
-  return [kindLabel(item.kind), fmtLiters(item.packageSize)].filter(Boolean).join(' · ');
+  return [kindLabel(item.kind), packSizeLabel(item.packageSize, item.unitsPerPackage)]
+    .filter(Boolean).join(' · ');
 }
 
 export interface InventoryGroup {

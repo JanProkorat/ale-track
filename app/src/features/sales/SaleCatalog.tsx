@@ -8,8 +8,8 @@ import { SegControl } from 'src/components/common/SegControl';
 import { PriceWithList } from 'src/components/common/PriceWithList';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { useBreweryColors } from 'src/hooks/useBreweries';
-import { fmtDate, fmtLiters, plural } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { fmtDate, plural } from 'src/lib/format';
+import { kindLabel, packSizeLabel } from 'src/lib/labels';
 import {
   bySection,
   historyAddPrice,
@@ -119,7 +119,11 @@ function RowMeta({ row, formatMoney }: { row: HistoryRow; formatMoney: (v?: numb
     <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
       {row.kind != null && <Chip size="small" label={kindLabel(row.kind)} sx={{ height: 20, fontSize: 11 }} />}
       {row.packageSize != null && (
-        <Chip size="small" label={fmtLiters(row.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
+        <Chip
+          size="small"
+          label={packSizeLabel(row.packageSize, row.unitsPerPackage)}
+          sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+        />
       )}
       <Typography sx={{ fontSize: 11.5, color: 'text.disabled', fontWeight: 600 }}>
         skladem {row.quantity ?? 0}
@@ -238,7 +242,7 @@ function VariantCard({
               {variant.packageSize != null && (
                 <Chip
                   size="small"
-                  label={fmtLiters(variant.packageSize)}
+                  label={packSizeLabel(variant.packageSize, variant.unitsPerPackage)}
                   sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
                 />
               )}
@@ -253,7 +257,7 @@ function VariantCard({
                 max={variant.quantity ?? 0}
                 itemName={
                   variant.packageSize != null
-                    ? `${variant.name ?? ''} ${fmtLiters(variant.packageSize)}`
+                    ? `${variant.name ?? ''} ${packSizeLabel(variant.packageSize, variant.unitsPerPackage)}`
                     : (variant.name ?? '')
                 }
                 onAdd={() => onAdd(variant)}
