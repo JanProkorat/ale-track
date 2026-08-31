@@ -63,6 +63,12 @@ public sealed record InventoryItemListItemDto
     /// Size of the whole package
     /// </summary>
     public double? PackageSize { get; set; }
+
+    /// <summary>
+    /// Containers per sellable unit. Without it a 12-can and a 24-can tray of the same 0,5 l can
+    /// are indistinguishable in the till's catalog.
+    /// </summary>
+    public int? UnitsPerPackage { get; set; }
     
     /// <summary>
     /// Price per one unit

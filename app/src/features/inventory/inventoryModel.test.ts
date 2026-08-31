@@ -81,6 +81,14 @@ describe('itemSubtitle', () => {
     expect(itemSubtitle(item({ kind: ProductKind.Keg, packageSize: 15 }))).toBe('Sud · 15 l');
   });
 
+  it('names the count so two trays of the same can read differently', () => {
+    const tray = (unitsPerPackage: number) =>
+      item({ kind: ProductKind.Can, packageSize: 0.5, unitsPerPackage });
+
+    expect(itemSubtitle(tray(12))).toBe('Plechovka · 12×0,5 l');
+    expect(itemSubtitle(tray(24))).toBe('Plechovka · 24×0,5 l');
+  });
+
   /** A good's size is free text, so it must not go through the litre formatter. */
   it('reads a supplier good by the size the supplier states', () => {
     expect(itemSubtitle(item({

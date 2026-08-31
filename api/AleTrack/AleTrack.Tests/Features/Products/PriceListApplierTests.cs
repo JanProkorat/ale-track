@@ -107,6 +107,32 @@ public sealed class PriceListApplierTests
     }
 
     [Fact]
+    public void Apply_ChangedRow_RewritesThePackagingSoTheNextImportMatchesStrictly()
+    {
+        // The other half of the loose match: correcting the row is the only thing that stops the
+        // next import from missing the strict key again and inserting a second copy.
+        var product = ProductBuilder.BuildEntity(
+            name: "Svijanský Máz", container: ProductContainer.Can,
+            saleUnit: ProductSaleUnit.Single, packageSize: 0.5, unitsPerPackage: 1);
+        var brewery = BreweryBuilder.BuildEntity();
+        brewery.Products.Add(product);
+
+        Apply(brewery, new PriceListDiffEntry
+        {
+            Kind = PriceListChangeKind.Changed,
+            Name = "Svijanský Máz",
+            Existing = State(product),
+            Row = Row(name: "Svijanský Máz", container: ProductContainer.Can, volume: 0.5,
+                      saleUnit: ProductSaleUnit.Tray, units: 24)
+        });
+
+        brewery.Products.Should().ContainSingle("the product is corrected, never duplicated");
+        product.SaleUnit.Should().Be(ProductSaleUnit.Tray);
+        product.UnitsPerPackage.Should().Be(24);
+        product.Kind.Should().Be(ProductKind.Can);
+    }
+
+    [Fact]
     public void Apply_BlockedProduct_IsLeftEntirelyAlone()
     {
         var product = ProductBuilder.BuildEntity(name: "Zámek", priceWithVat: 1344.00m);

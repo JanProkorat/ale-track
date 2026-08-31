@@ -8,8 +8,8 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { StatusPill } from 'src/components/common/StatusPill';
-import { num, fmtLiters, plural } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { num, plural } from 'src/lib/format';
+import { kindLabel, packSizeLabel } from 'src/lib/labels';
 import { type InventoryItemListItemDto } from 'src/generated/api-client';
 import { isLow, itemSubtitle, type InventoryGroup } from './inventoryModel';
 
@@ -140,10 +140,14 @@ export function InventoryProductPanel({
                 sx={{ height: 20, fontSize: 11 }}
               />
               {item.packageSize != null && (
-                <Chip size="small" label={fmtLiters(item.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
+                <Chip
+                  size="small"
+                  label={packSizeLabel(item.packageSize, item.unitsPerPackage)}
+                  sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                />
               )}
               {/* The supplier states a size as free text — "10 kg", "20 ks" — so it is not a litre
-                  volume and cannot go through fmtLiters. */}
+                  volume and cannot go through packSizeLabel. */}
               {item.size && (
                 <Chip size="small" label={item.size} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
               )}

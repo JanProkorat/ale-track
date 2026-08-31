@@ -79,6 +79,34 @@ describe('SaleCatalog browse tab', () => {
     expect(screen.getByLabelText('Přidat Svijanský Máz 50 l')).toBeInTheDocument();
   });
 
+  it('tells two trays of the same can apart by their count', () => {
+    // Both trays hold 0,5 l cans, so the volume alone drew one product as two identical rows —
+    // the prod duplicate that started this. The count is the only thing separating them, and it
+    // has to reach the stepper's label too, or a screen reader hears the same button twice.
+    const can = (id: string, unitsPerPackage: number) =>
+      stockItem(id, 'Svijanský Máz', 6, {
+        kind: ProductKind.Can,
+        packageSize: 0.5,
+        unitsPerPackage,
+        priceWithVat: unitsPerPackage === 12 ? 262.8 : 525.6,
+      });
+
+    renderCatalog({
+      sections: [
+        new InventorySectionDto({
+          id: 'b1',
+          name: 'Svijany',
+          items: [can('in-tray-12', 12), can('in-tray-24', 24)],
+        } as never),
+      ],
+    });
+
+    expect(screen.getByText('12×0,5 l')).toBeInTheDocument();
+    expect(screen.getByText('24×0,5 l')).toBeInTheDocument();
+    expect(screen.getByLabelText('Přidat Svijanský Máz 12×0,5 l')).toBeInTheDocument();
+    expect(screen.getByLabelText('Přidat Svijanský Máz 24×0,5 l')).toBeInTheDocument();
+  });
+
   it('adds a picked row with no price or amount suggestion — the ceník applies', () => {
     renderCatalog();
     fireEvent.click(screen.getByLabelText('Přidat Svijanský Rytíř'));

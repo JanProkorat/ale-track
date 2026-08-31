@@ -25,6 +25,9 @@ export interface StockRow {
   type?: ProductType;
   platoDegree?: number;
   packageSize?: number;
+  /** Containers per sellable unit — what tells a 12-can tray from a 24-can one, since both
+   *  carry the same {@link packageSize}. */
+  unitsPerPackage?: number;
   /** The price that counts — the client's own price when one applies, the brewery's ceník
    *  otherwise. See {@link listPriceWithVat}. */
   priceWithVat?: number;

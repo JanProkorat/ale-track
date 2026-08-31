@@ -124,26 +124,39 @@ public static class PriceListDiff
     public static List<PriceListDiffEntry> Compute(
         IEnumerable<PriceListRow> rows, IEnumerable<PriceListProductState> existing)
     {
-        var stored = new Dictionary<string, PriceListProductState>();
-        var unmatched = new List<PriceListProductState>();
+        var rowList = rows.ToList();
+        var storedList = existing.ToList();
 
-        foreach (var product in existing)
+        var byStrictKey = new Dictionary<string, PriceListProductState>();
+        foreach (var product in storedList)
         {
             // A catalogue that already holds the same product twice must not fail the import: the
             // list names it once, so the first copy matches and the rest are proposed for removal.
-            if (!stored.TryAdd(KeyOf(product), product))
+            byStrictKey.TryAdd(KeyOf(product), product);
+        }
+
+        var matches = new PriceListProductState?[rowList.Count];
+        var claimed = new HashSet<Guid>();
+
+        for (var i = 0; i < rowList.Count; i++)
+        {
+            if (byStrictKey.TryGetValue(KeyOf(rowList[i]), out var product))
             {
-                unmatched.Add(product);
+                matches[i] = product;
+                claimed.Add(product.PublicId);
             }
         }
 
-        var entries = new List<PriceListDiffEntry>();
-        var matched = new HashSet<string>();
+        MatchOnLooseKey(rowList, storedList, matches, claimed);
 
-        foreach (var row in rows)
+        var entries = new List<PriceListDiffEntry>();
+
+        for (var i = 0; i < rowList.Count; i++)
         {
-            var key = KeyOf(row);
-            if (!stored.TryGetValue(key, out var product))
+            var row = rowList[i];
+            var product = matches[i];
+
+            if (product is null)
             {
                 entries.Add(new PriceListDiffEntry
                 {
@@ -153,8 +166,6 @@ public static class PriceListDiff
                 });
                 continue;
             }
-
-            matched.Add(key);
 
             var priceChanges = PriceChanges(product, row);
             var otherChanges = NonPriceChanges(product, row);
@@ -175,12 +186,7 @@ public static class PriceListDiff
             });
         }
 
-        var omitted = stored
-            .Where(p => !matched.Contains(p.Key))
-            .Select(p => p.Value)
-            .Concat(unmatched);
-
-        foreach (var product in omitted)
+        foreach (var product in storedList.Where(p => !claimed.Contains(p.PublicId)))
         {
             entries.Add(new PriceListDiffEntry
             {
@@ -193,12 +199,82 @@ public static class PriceListDiff
         return entries;
     }
 
+    /// <summary>
+    /// Second matching pass: pairs a row the strict key missed with the stored product it is
+    /// plainly a restatement of, so the import corrects that product instead of inserting a copy.
+    /// </summary>
+    /// <remarks>
+    /// Why this exists: the <c>AddProductPackaging</c> migration guessed each legacy row's sale
+    /// unit and count, and a wrong guess puts the stored product permanently out of the strict
+    /// key's reach — the list's 24-can tray keys as <c>Tray|24</c> while the stored row keys as
+    /// <c>Single|1</c>, so every import files the tray as new and leaves the wrong copy behind.
+    ///
+    /// Only an unambiguous pair is taken: exactly one unmatched row and exactly one unclaimed
+    /// product sharing a <see cref="PriceListNormalizer.LooseKey"/>. Two rows competing for one
+    /// stored product (a list that sells both a 12-can and a 24-can tray, against a single legacy
+    /// row) has no non-arbitrary answer, so both stay <see cref="PriceListChangeKind.Added"/> and
+    /// the stored row is reported for removal — the old behaviour, which a person can then judge.
+    /// </remarks>
+    private static void MatchOnLooseKey(
+        List<PriceListRow> rows,
+        List<PriceListProductState> stored,
+        PriceListProductState?[] matches,
+        HashSet<Guid> claimed)
+    {
+        var rowsPerLooseKey = new Dictionary<string, int>();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (matches[i] is not null)
+            {
+                continue;
+            }
+
+            var looseKey = LooseKeyOf(rows[i]);
+            rowsPerLooseKey[looseKey] = rowsPerLooseKey.GetValueOrDefault(looseKey) + 1;
+        }
+
+        if (rowsPerLooseKey.Count == 0)
+        {
+            return;
+        }
+
+        var candidates = stored
+            .Where(p => !claimed.Contains(p.PublicId))
+            .GroupBy(LooseKeyOf)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (matches[i] is not null)
+            {
+                continue;
+            }
+
+            var looseKey = LooseKeyOf(rows[i]);
+            if (rowsPerLooseKey[looseKey] != 1
+                || !candidates.TryGetValue(looseKey, out var pool)
+                || pool.Count != 1)
+            {
+                continue;
+            }
+
+            matches[i] = pool[0];
+            claimed.Add(pool[0].PublicId);
+        }
+    }
+
     private static string KeyOf(PriceListRow row) =>
         PriceListNormalizer.Key(row.Name, row.Container, row.VolumeLiters, row.SaleUnit, row.UnitsPerPackage);
 
     private static string KeyOf(PriceListProductState product) =>
         PriceListNormalizer.Key(
             product.Name, product.Container, product.VolumeLiters, product.SaleUnit, product.UnitsPerPackage);
+
+    private static string LooseKeyOf(PriceListRow row) =>
+        PriceListNormalizer.LooseKey(row.Name, row.Container, row.VolumeLiters);
+
+    private static string LooseKeyOf(PriceListProductState product) =>
+        PriceListNormalizer.LooseKey(product.Name, product.Container, product.VolumeLiters);
 
     private static List<PriceListFieldChange> PriceChanges(PriceListProductState product, PriceListRow row)
     {
@@ -219,6 +295,23 @@ public static class PriceListDiff
         if (product.Type != row.Type)
         {
             changes.Add(new PriceListFieldChange(nameof(product.Type), product.Type.ToString(), row.Type.ToString()));
+        }
+
+        // Both are part of the strict key, so a strictly matched row can never report them. They
+        // are here for the loose match, where the corrected packaging is the whole point of the
+        // entry — and the reason it reads as Changed rather than a silent reprice.
+        if (product.SaleUnit != row.SaleUnit)
+        {
+            changes.Add(new PriceListFieldChange(
+                nameof(product.SaleUnit), product.SaleUnit.ToString(), row.SaleUnit.ToString()));
+        }
+
+        if (product.UnitsPerPackage != row.UnitsPerPackage)
+        {
+            changes.Add(new PriceListFieldChange(
+                nameof(product.UnitsPerPackage),
+                product.UnitsPerPackage.ToString(CultureInfo.InvariantCulture),
+                row.UnitsPerPackage.ToString(CultureInfo.InvariantCulture)));
         }
 
         AddFloat(changes, nameof(product.AlcoholPercentage), product.AlcoholPercentage, row.AlcoholPercentage);
