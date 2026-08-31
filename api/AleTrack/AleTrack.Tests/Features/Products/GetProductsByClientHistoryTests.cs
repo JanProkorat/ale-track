@@ -455,4 +455,55 @@ public sealed class GetProductsByClientHistoryTests
         itemB.PriceWithVat.Should().Be(890m);
         itemB.ListPriceWithVat.Should().BeNull();
     }
+
+    [Fact]
+    public async Task HandleAsync_TwoTraysOfTheSameCan_CarryTheirPackagingSoTheCatalogCanTellThemApart()
+    {
+        // Svijanský Máz in prod: a 12-can and a 24-can tray of the same 0,5 l can. Kind and
+        // PackageSize are identical, so a projection that drops the packaging fields renders the
+        // product twice as "Plechovka 0,5 l" with no way to tell which tray is which.
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        client.Id = 1;
+
+        var brewery = BreweryBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+
+        var tray12 = ProductBuilder.BuildEntity(
+            publicId: Guid.NewGuid(), name: "Svijanský Máz", packageSize: 0.5,
+            container: ProductContainer.Can, saleUnit: ProductSaleUnit.Tray, unitsPerPackage: 12);
+        tray12.Id = 1;
+        tray12.Brewery = brewery;
+
+        var tray24 = ProductBuilder.BuildEntity(
+            publicId: Guid.NewGuid(), name: "Svijanský Máz", packageSize: 0.5,
+            container: ProductContainer.Can, saleUnit: ProductSaleUnit.Tray, unitsPerPackage: 24);
+        tray24.Id = 2;
+        tray24.Brewery = brewery;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            breweries: [brewery],
+            products: [tray12, tray24]
+        );
+
+        var request = new GetProductsByClientHistoryRequest { ClientId = clientId };
+        var endpoint = EndpointWithResponseBuilder<GetProductsByClientHistoryRequest,
+            GroupedProductHistoryDto, GetProductsByClientHistoryEndpoint>
+            .Create(dbContext.Object);
+
+        // Act
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        // Assert
+        var items = endpoint.Response.Breweries
+            .SelectMany(b => b.Kinds)
+            .SelectMany(k => k.PackageSizes)
+            .SelectMany(ps => ps.Items)
+            .ToList();
+        items.Should().HaveCount(2);
+
+        items.Should().OnlyContain(i => i.Container == ProductContainer.Can
+            && i.SaleUnit == ProductSaleUnit.Tray);
+        items.Select(i => i.UnitsPerPackage).Should().BeEquivalentTo([12, 24]);
+    }
 }

@@ -18,7 +18,7 @@ import { PriceWithList } from 'src/components/common/PriceWithList';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { plural, fmtLiters } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, packSizeLabel } from 'src/lib/labels';
 import type { BreweryGroupDto, ProductListItemDto } from 'src/generated/api-client';
 import {
   KIND_TABS, breweryPanels, countsByKind, groupByName, matchesQuery,
@@ -93,7 +93,7 @@ export function ProductRow({
         <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{product.name}</Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
           <Chip size="small" label={kindLabel(product.kind)} sx={{ height: 20, fontSize: 11 }} />
-          {product.packageSize != null && <Chip size="small" label={fmtLiters(product.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
+          {product.packageSize != null && <Chip size="small" label={packSizeLabel(product.packageSize, product.unitsPerPackage)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
           <PriceWithList price={product.priceWithVat} listPrice={product.listPriceWithVat} />
           {product.listPriceWithVat != null && <ClientPriceChip />}
           {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
@@ -135,7 +135,7 @@ export function VariantCard({
               sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}
             >
               <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
-              <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
+              <Chip size="small" label={packSizeLabel(v.packageSize, v.unitsPerPackage) ?? fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
               <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>{v.description ?? ''}</Typography>
               {v.listPriceWithVat != null && <ClientPriceChip />}
               <PriceWithList price={v.priceWithVat} listPrice={v.listPriceWithVat} />

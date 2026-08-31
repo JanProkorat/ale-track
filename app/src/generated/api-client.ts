@@ -21849,6 +21849,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
+    unitsPerPackage?: number | undefined;
     priceWithVat?: number | undefined;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
@@ -21876,6 +21877,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
             this.packageSize = _data["packageSize"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
@@ -21903,6 +21905,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
         data["packageSize"] = this.packageSize;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
@@ -21923,6 +21926,7 @@ export interface IInventoryItemListItemDto {
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
+    unitsPerPackage?: number | undefined;
     priceWithVat?: number | undefined;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
