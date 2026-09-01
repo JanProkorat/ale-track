@@ -1088,8 +1088,6 @@ export function OrderEditor({
   const persist = async ({ ignoreShortfall = false } = {}): Promise<string | null> => {
     if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
     if (shortfalls.length > 0 && !ignoreShortfall) { setConfirmShortfall(true); return null; }
-    // Either kind of line counts: a client asking only for a CO₂ refill has ordered.
-    if (cart.length === 0 && goodLines.length === 0) { enqueueSnackbar('Přidejte alespoň jednu položku', { variant: 'warning' }); return null; }
     // Blank-name rows are scratch rows the user never filled in — drop them
     // rather than fail validation on save.
     const returnsPayload = returns
@@ -1108,6 +1106,14 @@ export function OrderEditor({
         quantity: e.quantity,
         note: e.note.trim() || undefined,
       }));
+
+    // Any kind of line counts: a client asking only for a CO₂ refill has ordered, and so has
+    // one whose whole order is položky navíc — tácky, a keg deposit, a service call with no goods.
+    // Checked after the payloads are built so blank scratch rows do not count as a line.
+    if (cart.length === 0 && goodLines.length === 0 && extrasPayload.length === 0) {
+      enqueueSnackbar('Přidejte alespoň jednu položku', { variant: 'warning' });
+      return null;
+    }
 
     // Only the id, the good and the quantity are written; the name and price on the DTO
     // are read-only fields the server resolves.
