@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -7,6 +8,7 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.SetStockPurchase;
 
@@ -83,7 +85,11 @@ public sealed class SetStockPurchaseValidator : Validator<SetStockPurchaseReques
 /// </remarks>
 /// <param name="dbContext"></param>
 /// <param name="driverScope"></param>
-public sealed class SetStockPurchaseEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+/// <param name="companyOptions"></param>
+public sealed class SetStockPurchaseEndpoint(
+    AleTrackDbContext dbContext,
+    IDriverScope driverScope,
+    IOptions<CompanyOptions> companyOptions)
     : Endpoint<SetStockPurchaseRequest>
 {
     /// <inheritdoc />
@@ -115,11 +121,16 @@ public sealed class SetStockPurchaseEndpoint(AleTrackDbContext dbContext, IDrive
     {
         await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
 
-        // Only the purchase lines and the products behind them — none of the route, orders or
-        // invoice graph the full PUT has to load in order to diff it.
+        // The purchase lines and the products behind them, plus the route and the supplier-good
+        // lines under it — CompanyStopReconciler reads both to decide whether the run still has
+        // business at the warehouse. Still narrower than the full PUT, which also needs the
+        // invoice graph in order to diff it.
         var shipment = await dbContext.OutgoingShipments
             .Include(os => os.StockPurchases)
                 .ThenInclude(sp => sp.Product)
+            .Include(os => os.Stops)
+                .ThenInclude(s => s.ClientOrder!)
+                    .ThenInclude(o => o.SupplierGoodItems)
             .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (shipment is null)
@@ -169,6 +180,11 @@ public sealed class SetStockPurchaseEndpoint(AleTrackDbContext dbContext, IDrive
                 IsShipmentLoadingConfirmed = false
             });
         }
+
+        // Buying for stock gives the run something to do at our own warehouse, so the route needs
+        // the company stop — and loses it again when the last line goes. Server-side, in the same
+        // reconciler the route save and the sourcing stepper use, so the three cannot disagree.
+        CompanyStopReconciler.Apply(shipment, companyOptions.Value);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
