@@ -8,7 +8,9 @@ using AleTrack.Features.OutgoingShipments.Commands.SetStockPurchase;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
+using static AleTrack.Tests.Features.OutgoingShipments.OutgoingShipmentTestHelpers;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
@@ -432,7 +434,7 @@ public sealed class ShipmentStateEndpointTests
 
     private static SetStockPurchaseEndpoint StockPurchaseEndpoint(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db) =>
         EndpointBuilder<SetStockPurchaseRequest, SetStockPurchaseEndpoint>
-            .Create(db.Object, DriverScopeMockFactory.Unscoped());
+            .Create(db.Object, DriverScopeMockFactory.Unscoped(), Options.Create(Company));
 
     private static SetStockPurchaseRequest StockPurchaseRequest(Fixture f, Product product, int quantity) => new()
     {
@@ -591,5 +593,64 @@ public sealed class ShipmentStateEndpointTests
         var act = async () => await StockPurchaseEndpoint(db).HandleAsync(request, CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    // -----------------------------------------------------------------------------------
+    // The route follows the purchase.
+    //
+    // Goods bought for our own warehouse have to come off somewhere, so buying any gives the
+    // run business at the warehouse and the company stop has to be on the route. The rules of
+    // that stop live in CompanyStopReconciler and are pinned by its own tests; what these pin
+    // is that this endpoint runs it at all — it used to load only the purchase lines and save,
+    // leaving the route unaware that anything had been bought.
+    // -----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SetStockPurchase_FirstLine_PutsTheWarehouseOnTheRoute()
+    {
+        var f = BuildFixture();
+        var (product, db) = WithPurchasableProduct(f);
+
+        await StockPurchaseEndpoint(db).HandleAsync(StockPurchaseRequest(f, product, 6), CancellationToken.None);
+
+        var companyStop = f.Shipment.Stops.Should()
+            .ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Company).Subject;
+        companyStop.Label.Should().Be(Company.Name);
+        companyStop.Latitude.Should().Be(Company.Latitude);
+        companyStop.Longitude.Should().Be(Company.Longitude);
+        companyStop.Order.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task SetStockPurchase_SecondLine_DoesNotAddASecondWarehouseStop()
+    {
+        var f = BuildFixture();
+        var other = ProductBuilder.BuildEntity(name: "Svijanský Rytíř");
+        other.Id = 72;
+        var (product, db) = WithPurchasableProduct(f, other);
+
+        await StockPurchaseEndpoint(db).HandleAsync(StockPurchaseRequest(f, product, 6), CancellationToken.None);
+        await StockPurchaseEndpoint(db).HandleAsync(StockPurchaseRequest(f, other, 4), CancellationToken.None);
+
+        f.Shipment.Stops.Count(s => s.Kind == OutgoingShipmentStopKind.Company).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SetStockPurchase_ToZeroForTheLastLine_TakesTheWarehouseBackOffTheRoute()
+    {
+        var f = BuildFixture();
+        var (product, db) = WithPurchasableProduct(f);
+        f.Shipment.StockPurchases.Add(new OutgoingShipmentStockPurchaseItem
+        {
+            PublicId = Guid.NewGuid(), Product = product, Quantity = 1
+        });
+        f.Shipment.Stops.Add(new OutgoingShipmentStop
+        {
+            PublicId = Guid.NewGuid(), Kind = OutgoingShipmentStopKind.Company, Order = 2, Label = Company.Name
+        });
+
+        await StockPurchaseEndpoint(db).HandleAsync(StockPurchaseRequest(f, product, 0), CancellationToken.None);
+
+        f.Shipment.Stops.Should().NotContain(s => s.Kind == OutgoingShipmentStopKind.Company);
     }
 }
