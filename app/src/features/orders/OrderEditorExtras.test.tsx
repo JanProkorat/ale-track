@@ -381,6 +381,55 @@ describe('OrderEditor — vratky a poznámky', () => {
   });
 });
 
+/**
+ * Reported: an order whose whole content is položky navíc — tácky, a keg deposit, a service
+ * call — could not be saved, because the save guard demanded a cart or a supplier-goods line.
+ * The backend never required products, so only the editor stood in the way.
+ */
+describe('OrderEditor — objednávka bez produktů', () => {
+  /** An order with nothing in it: no cart lines, no supplier goods, no extras. */
+  function emptyOrder(): OrderDto {
+    return new OrderDto({
+      id: 'order-1',
+      client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
+      orderItems: [],
+      returns: [],
+      notes: [],
+      customExtraItems: [],
+    });
+  }
+
+  it('saves an order carrying only a custom extra', async () => {
+    orderResponse = emptyOrder();
+
+    renderEditor();
+
+    fireEvent.click(within(extrasCard()).getByRole('button', { name: 'Přidat' }));
+    fireEvent.change(extraInputs()[0], { target: { value: 'Tácky' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    const sent = updateMutate.mock.calls[0][0].data;
+    expect(sent.orderItems).toHaveLength(0);
+    expect(sent.supplierGoodItems).toHaveLength(0);
+    expect(sent.customExtraItems).toHaveLength(1);
+    expect(sent.customExtraItems[0].description).toBe('Tácky');
+  });
+
+  it('still refuses an order whose only extra row was left blank', async () => {
+    orderResponse = emptyOrder();
+
+    renderEditor();
+
+    fireEvent.click(within(extrasCard()).getByRole('button', { name: 'Přidat' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+
+    await waitFor(() => expect(updateMutate).not.toHaveBeenCalled());
+  });
+});
+
 describe('OrderEditor — poznámka u položky košíku', () => {
   it('hides the note field until the note button is pressed', () => {
     renderEditor();
